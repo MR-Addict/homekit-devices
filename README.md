@@ -6,6 +6,7 @@
 
 ```
 src/
+├── fan/    风扇：ESP32-C3 HomeKit 开关 + 实体按键，恢复上次状态
 ├── lamp/   台灯：HomeKit 开关 + 实体按键
 └── wol/    网络唤醒：发送 Magic Packet 唤醒局域网内的电脑
 ```
@@ -42,11 +43,11 @@ ESP32 芯片至少有 4MB flash，但程序实际可用空间由**分区方案**
 
 ### OTA
 
-两个 sketch 均已启用 OTA（密码 `ota`）。设备联网后可在 Arduino IDE 中通过网络更新，无需 USB 连接。
+三个 sketch 均已启用 OTA（密码 `ota`）。设备联网后可在 Arduino IDE 中通过网络更新，无需 USB 连接。
 
 ## 烧录流程
 
-1. 安装 Arduino IDE 与 Arduino-ESP32 v3.x
+1. 安装 Arduino IDE 与 Arduino-ESP32 v3.x；风扇选择 **ESP32C3 Dev Module** 开发板
 2. 安装依赖库（HomeSpan、WakeOnLan）
 3. 选择 `工具 → 分区方案 → Minimal SPIFFS`
 4. 打开 `src/<设备>/<设备>.ino`，编译并上传
