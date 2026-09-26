@@ -2,6 +2,8 @@
 
 ESP32 台灯控制，接入 Apple HomeKit。可在「家庭」App 中开关灯，也可通过实体按键本地翻转状态。
 
+固件会广播 `HS-Lamp-xxxx` BLE 配网服务。使用项目的通用配网页面连接设备，先验证 OTA 密码 `ota`，再设置 Wi‑Fi。页面的本地运行与 GitHub Pages 地址见项目总 README。
+
 ## 引脚
 
 | 功能 | GPIO |
@@ -17,3 +19,4 @@ ESP32 台灯控制，接入 Apple HomeKit。可在「家庭」App 中开关灯�
 
 - `lamp.ino`：入口，初始化 HomeSpan 与配件
 - `lamp.h`：`HSTableLamp` 服务（`Service::LightBulb`），处理开关状态与按键事件
+- `../common/ble_provision.h`：与其他设备共用的 BLE 配网服务

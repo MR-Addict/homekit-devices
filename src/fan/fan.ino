@@ -1,11 +1,14 @@
 #include "HomeSpan.h"
 
 #include "fan.h"
+#include "../common/ble_provision.h"
+
+HSBleProvision bleProvision;
 
 void setup() {
   Serial.begin(115200);
 
-  homeSpan.enableOTA("ota");
+  homeSpan.enableOTA(HS_OTA_PASSWORD);
   homeSpan.begin(Category::Fans, "Fan", "HomeSpan-Fan");
 
   new SpanAccessory();
@@ -14,7 +17,11 @@ void setup() {
 
   new HSFan(4, 3);
 
+  bleProvision.begin("HS-Fan");
   homeSpan.autoPoll();
 }
 
-void loop() {}
+void loop() {
+  bleProvision.poll();
+  delay(10);
+}

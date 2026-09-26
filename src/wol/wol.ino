@@ -7,11 +7,14 @@ WiFiUDP UDP;
 WakeOnLan WOL(UDP);
 
 #include "wol.h"
+#include "../common/ble_provision.h"
+
+HSBleProvision bleProvision;
 
 void setup() {
   Serial.begin(115200);
 
-  homeSpan.enableOTA("ota");
+  homeSpan.enableOTA(HS_OTA_PASSWORD);
   homeSpan.begin(Category::Switches, "HSWOL", "HomeSpan-HSWOL");
 
   // 第一台设备（PVE 主机）
@@ -26,7 +29,11 @@ void setup() {
   new Characteristic::Identify();
   new HSWOL("74:56:3C:D3:65:74");
 
+  bleProvision.begin("HS-WOL");
   homeSpan.autoPoll();
 }
 
-void loop() {}
+void loop() {
+  bleProvision.poll();
+  delay(10);
+}

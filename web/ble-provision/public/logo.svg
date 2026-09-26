@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">HomeKit 设备</title>
+  <rect width="64" height="64" rx="16" fill="#172436"/>
+  <path d="M12 29 32 13l20 16M17 26v24h30V26" fill="none" stroke="#7be0d2" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 37q8-8 16 0M28 42q4-4 8 0" fill="none" stroke="#eef4fc" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="46" r="2" fill="#eef4fc"/>
+</svg>

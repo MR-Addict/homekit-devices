@@ -1,0 +1,17 @@
+{
+  "name": "homekit-ble-provision",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "node --test test/*.test.ts",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/web-bluetooth": "^0.0.21",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}
