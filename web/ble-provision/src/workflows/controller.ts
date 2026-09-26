@@ -73,7 +73,7 @@ export class ProvisionController {
     this.view.clearWifiInputs();
     try {
       const credentials = await this.session.readCurrentWifiCredentials(signal);
-      if (!credentials) return "设备固件不支持读取当前 Wi‑Fi 信息，请手动填写。";
+      if (!credentials) return "未找到 Wi‑Fi 配置读取接口。请确认设备已更新固件并重启；若已更新，请清除蓝牙服务缓存后重连。也可手动填写。";
       this.view.setWifiCredentials(credentials.ssid, credentials.password);
       return credentials.ssid ? "已回填设备当前的 Wi‑Fi 信息。" : "设备尚未保存 Wi‑Fi 信息，请填写网络名称和密码。";
     } catch (error) {
