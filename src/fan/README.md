@@ -28,11 +28,11 @@ npm ci
 npm run dev
 ```
 
-在电脑的 Chrome 或 Edge 中打开 Vite 显示的本地地址，或打开项目的 [GitHub Pages](https://MR-Addict.github.io/homekit-devices/)。点击“搜索设备”并选择 `HS-Fan-xxxx`，先输入 OTA 密码 `ota` 验证，再填写 Wi‑Fi 名称及密码并提交。网页会在设备保存凭据并重启后尝试重新连接 BLE，确认 Wi‑Fi 状态。SSID 最多 32 个 UTF‑8 字节，密码最多 64 个 UTF‑8 字节；开放网络的密码可以留空。输错 Wi‑Fi 凭据时，设备仍会广播 BLE，可重新连接并填写正确配置。
+在电脑的 Chrome 或 Edge 中打开 Vite 显示的本地地址，或打开项目的 [GitHub Pages](https://MR-Addict.github.io/homekit-devices/)。点击“搜索设备”并选择 `HS-Fan-xxxx`，首次输入 OTA 密码 `ota` 验证，再填写 Wi‑Fi 名称及密码并提交。验证成功的 OTA 密码会保存在当前浏览器，下次连接时自动验证。网页会在设备保存凭据并重启后尝试重新连接 BLE，确认 Wi‑Fi 状态；也可随时手动断开。SSID 最多 32 个 UTF‑8 字节，密码最多 64 个 UTF‑8 字节；开放网络的密码可以留空。输错 Wi‑Fi 凭据时，设备仍会广播 BLE，可重新连接并填写正确配置。
 
 Web Bluetooth 必须从浏览器支持的安全上下文使用；`localhost` 可用于本地运行。首版在电脑 Chrome/Edge 验证；若要在 Android Chrome 上打开，需要把静态页面放到可信的 HTTPS 地址。iPhone/iPad 的 Safari 不原生支持 Web Bluetooth。
 
-BLE 写入要求加密连接，配网密码与本 sketch 的 OTA 密码相同，均为固定的 `ota`。**该密码已出现在项目代码和文档中，只能防止误操作，不能防止附近知晓密码的人修改设备的 Wi‑Fi。**页面代码不会另行保存或上传输入的密码。
+BLE 写入要求加密连接，配网密码与本 sketch 的 OTA 密码相同，均为固定的 `ota`。**该密码已出现在项目代码和文档中，只能防止误操作，不能防止附近知晓密码的人修改设备的 Wi‑Fi。**页面会在验证成功后把 OTA 密码保存到当前浏览器的 localStorage；Wi‑Fi 信息不会保存在浏览器或上传到服务器。
 
 ## 文件
 

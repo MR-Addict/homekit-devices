@@ -3,83 +3,76 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0e1724">
+    <meta name="theme-color" content="#f5f6f0">
     <title>HomeKit 设备 BLE 配网</title>
     <link rel="icon" type="image/svg+xml" href="./logo.svg">
     <script type="module" src="./src/app.ts"></script>
   </head>
   <body>
     <main class="shell">
-      <header>
+      <header class="intro">
         <div class="brand">
-          <img class="brand-logo" src="./logo.svg" alt="" width="56" height="56">
-          <div>
-            <div class="eyebrow">HOMESPAN · BLE 配网</div>
-            <h1>配置设备网络</h1>
-          </div>
+          <img class="brand-logo" src="./logo.svg" alt="" width="40" height="40">
+          <span>HOME DEVICES</span>
         </div>
-        <p>靠近风扇、台灯或网络唤醒设备，按步骤更新 Wi‑Fi。设备当前无需连接网络。</p>
+        <div class="hero">
+          <p class="eyebrow">无线设置 / WIRELESS SETUP</p>
+          <h1>让设备<br><span>连上网络。</span></h1>
+          <p class="lead">靠近设备，打开蓝牙。<br>几步就能更新它的 Wi‑Fi 信息。</p>
+        </div>
+        <p class="intro-note"><span aria-hidden="true"></span> 仅在浏览器与附近设备之间通信</p>
       </header>
 
-      <ol class="progress" aria-label="配网步骤">
-        <li data-step-indicator="connect" aria-current="step">连接设备</li>
-        <li data-step-indicator="auth">验证密码</li>
-        <li data-step-indicator="wifi">配置 Wi‑Fi</li>
-        <li data-step-indicator="result">查看结果</li>
-      </ol>
+      <div class="workspace">
+        <div class="setup-surface">
+          <section class="device-section" aria-labelledby="device-heading">
+            <div class="section-header">
+              <h2 id="device-heading">选择设备</h2>
+              <span class="section-hint">BLE</span>
+            </div>
+            <div class="device-row">
+              <div class="device-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none"><path d="m12 9 9 9-5 5V5l5 5-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="device-details">
+                <div id="device-name" class="device-name">尚未选择设备</div>
+                <div id="device-state" class="device-state">请先开启蓝牙</div>
+              </div>
+            </div>
+            <div class="device-actions">
+              <button id="connect-button" class="button primary" type="button">搜索设备 <span aria-hidden="true">↗</span></button>
+              <button id="disconnect-button" class="button quiet" type="button" hidden>断开蓝牙</button>
+            </div>
+          </section>
 
-      <section class="card step-panel" data-step-panel="connect" aria-labelledby="device-heading">
-        <div class="section-heading">
-          <span class="step">01</span>
-          <h2 id="device-heading">连接设备</h2>
-        </div>
-        <div class="device-row">
-          <div>
-            <div id="device-name" class="device-name">尚未选择设备</div>
-            <div id="device-state" class="muted">请先开启蓝牙</div>
-          </div>
-          <button id="connect-button" class="button secondary" type="button">搜索设备</button>
-        </div>
-      </section>
+          <section id="auth-section" class="form-section" aria-labelledby="auth-heading" hidden>
+            <div class="section-header">
+              <h2 id="auth-heading">验证 OTA 密码</h2>
+            </div>
+            <form id="auth-form" autocomplete="off">
+              <label for="ota-password">OTA 密码</label>
+              <input id="ota-password" type="password" required autocomplete="off" placeholder="输入设备的 OTA 密码">
+              <button id="auth-button" class="button primary" type="submit">验证并继续 <span aria-hidden="true">↗</span></button>
+            </form>
+          </section>
 
-      <section class="card step-panel" data-step-panel="auth" aria-labelledby="auth-heading" hidden>
-        <div class="section-heading">
-          <span class="step">02</span>
-          <h2 id="auth-heading">验证 OTA 密码</h2>
+          <section id="wifi-section" class="form-section" aria-labelledby="wifi-heading" hidden>
+            <div class="section-header">
+              <h2 id="wifi-heading">Wi‑Fi 信息</h2>
+            </div>
+            <form id="provision-form" autocomplete="off">
+              <label for="ssid">网络名称</label>
+              <input id="ssid" type="text" required autocomplete="off" spellcheck="false" placeholder="2.4 GHz Wi‑Fi 名称">
+              <label for="wifi-password">网络密码</label>
+              <input id="wifi-password" type="text" autocomplete="off" spellcheck="false" placeholder="开放网络可留空">
+              <button id="submit-button" class="button primary" type="submit">保存 Wi‑Fi 信息 <span aria-hidden="true">↗</span></button>
+            </form>
+          </section>
         </div>
-        <p class="muted">已连接 <span id="auth-device-description">设备</span>。验证后才能填写 Wi‑Fi 信息。</p>
-        <form id="auth-form" autocomplete="off">
-          <label for="ota-password">OTA 密码</label>
-          <input id="ota-password" type="password" required autocomplete="off" placeholder="输入设备的 OTA 密码">
-          <button id="auth-button" class="button primary" type="submit">验证密码并继续</button>
-        </form>
-      </section>
 
-      <section class="card step-panel" data-step-panel="wifi" aria-labelledby="wifi-heading" hidden>
-        <div class="section-heading">
-          <span class="step">03</span>
-          <h2 id="wifi-heading">配置 Wi‑Fi</h2>
-        </div>
-        <form id="provision-form" autocomplete="off">
-          <label for="ssid">Wi‑Fi 名称（SSID）</label>
-          <input id="ssid" type="text" required autocomplete="off" spellcheck="false" placeholder="输入 2.4 GHz Wi‑Fi 名称">
-          <label for="wifi-password">Wi‑Fi 密码</label>
-          <input id="wifi-password" type="password" autocomplete="off" placeholder="开放网络可留空">
-          <button id="submit-button" class="button primary" type="submit">保存并连接 Wi‑Fi</button>
-        </form>
-      </section>
-
-      <section class="card step-panel" data-step-panel="result" aria-labelledby="result-heading" hidden>
-        <div class="section-heading">
-          <span class="step">04</span>
-          <h2 id="result-heading">配置结果</h2>
-        </div>
-        <p class="muted">设备会在保存配置后重启。页面将尝试重新连接蓝牙并确认 Wi‑Fi 状态。</p>
-        <button id="retry-button" class="button secondary" type="button">重新配置</button>
-      </section>
-
-      <div id="status" class="status" role="status" aria-live="polite">等待连接设备</div>
-      <footer>本页面只与浏览器选择的蓝牙设备通信，不会另行保存或上传输入的密码。</footer>
+        <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+        <footer>OTA 密码验证成功后保存在此浏览器。Wi‑Fi 信息不会保存或上传。</footer>
+      </div>
     </main>
   </body>
 </html>

@@ -51,9 +51,9 @@ ESP32 芯片至少有 4MB flash，但程序实际可用空间由**分区方案**
 
 ### BLE 配网页面
 
-在 `web/ble-provision/` 中运行 `npm ci` 和 `npm run dev`，然后用电脑上的 Chrome 或 Edge 打开 Vite 显示的本地地址。页面依次引导连接设备、验证 OTA 密码 `ota`、填写 Wi‑Fi 信息并查看重启后的连接结果。设备名分别以 `HS-Fan-`、`HS-Lamp-`、`HS-WOL-` 开头，后四位用于区分设备。
+在 `web/ble-provision/` 中运行 `npm ci` 和 `npm run dev`，然后用电脑上的 Chrome 或 Edge 打开 Vite 显示的本地地址。搜索并连接设备后，首次需验证 OTA 密码 `ota`，然后填写 Wi‑Fi 信息。验证成功的 OTA 密码会保存在当前浏览器的 localStorage 中，下次连接时自动验证。页面会在设备保存凭据并重启后尝试重新连接蓝牙，确认 Wi‑Fi 状态；连接后可随时手动断开蓝牙。设备名分别以 `HS-Fan-`、`HS-Lamp-`、`HS-WOL-` 开头，后四位用于区分设备。
 
-推送到 `main` 后，GitHub Action 会将 `npm run build` 的产物发布到 [GitHub Pages](https://MR-Addict.github.io/homekit-devices/)；首次发布需要在仓库 Pages 设置中选择 `gh-pages` 分支作为发布源。Web Bluetooth 需要 HTTPS 或 localhost 环境；iPhone/iPad Safari 不原生支持。网页不会另行保存或上传输入的密码。这里的 `ota` 密码已公开于代码中，只用于避免误操作。
+推送到 `main` 后，GitHub Action 会将 `npm run build` 的产物发布到 [GitHub Pages](https://MR-Addict.github.io/homekit-devices/)；首次发布需要在仓库 Pages 设置中选择 `gh-pages` 分支作为发布源。Web Bluetooth 需要 HTTPS 或 localhost 环境；iPhone/iPad Safari 不原生支持。Wi‑Fi 信息不会保存在浏览器或上传到服务器；OTA 密码仅保存在当前浏览器。这里的 `ota` 密码已公开于代码中，只用于避免误操作。
 
 ## 烧录流程
 

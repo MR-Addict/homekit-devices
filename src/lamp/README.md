@@ -2,7 +2,7 @@
 
 ESP32 台灯控制，接入 Apple HomeKit。可在「家庭」App 中开关灯，也可通过实体按键本地翻转状态。
 
-固件会广播 `HS-Lamp-xxxx` BLE 配网服务。使用项目的通用配网页面连接设备，先验证 OTA 密码 `ota`，再设置 Wi‑Fi。页面的本地运行与 GitHub Pages 地址见项目总 README。
+固件会广播 `HS-Lamp-xxxx` BLE 配网服务。使用项目的通用配网页面连接设备，首次验证 OTA 密码 `ota` 后设置 Wi‑Fi；验证成功的密码会保存在当前浏览器，后续连接时自动验证。页面的本地运行与 GitHub Pages 地址见项目总 README。
 
 ## 引脚
 

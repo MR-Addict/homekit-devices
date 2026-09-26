@@ -12,7 +12,9 @@ import {
   type Frame,
   type DeviceStatus,
 } from "./protocol.ts";
-import { nextStep, type Step, type FlowEvent } from "./flow.ts";
+import { canDisconnect, disconnectMessage, showAuthForm, showWifiForm, type Phase } from "./flow.ts";
+
+const OTA_STORAGE_KEY = "homekit-ble-provision:ota-password:v1";
 
 function element<T extends HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -21,27 +23,28 @@ function element<T extends HTMLElement>(selector: string): T {
 }
 
 const connectButton = element<HTMLButtonElement>("#connect-button");
+const disconnectButton = element<HTMLButtonElement>("#disconnect-button");
 const authButton = element<HTMLButtonElement>("#auth-button");
 const submitButton = element<HTMLButtonElement>("#submit-button");
-const retryButton = element<HTMLButtonElement>("#retry-button");
 const authForm = element<HTMLFormElement>("#auth-form");
 const provisionForm = element<HTMLFormElement>("#provision-form");
+const authSection = element<HTMLElement>("#auth-section");
+const wifiSection = element<HTMLElement>("#wifi-section");
 const deviceName = element<HTMLElement>("#device-name");
 const deviceState = element<HTMLElement>("#device-state");
-const authDeviceDescription = element<HTMLElement>("#auth-device-description");
 const statusElement = element<HTMLElement>("#status");
 const otaInput = element<HTMLInputElement>("#ota-password");
 const ssidInput = element<HTMLInputElement>("#ssid");
 const wifiInput = element<HTMLInputElement>("#wifi-password");
-const panels = [...document.querySelectorAll<HTMLElement>("[data-step-panel]")];
-const indicators = [...document.querySelectorAll<HTMLElement>("[data-step-indicator]")];
 
-let step: Step = "connect";
+let phase: Phase = "disconnected";
 let device: BluetoothDevice | undefined;
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
 let statusCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
-let busy = false;
-let checkingAfterRestart = false;
+let operation: AbortController | undefined;
+let authorized = false;
+let saved = false;
+let confirmed = false;
 
 class DeviceResultError extends Error {
   constructor(readonly result: number) {
@@ -54,69 +57,85 @@ function errorMessage(error: unknown): string {
 }
 
 function showStatus(message: string, kind = ""): void {
+  statusElement.hidden = false;
   statusElement.textContent = message;
   statusElement.dataset.kind = kind;
 }
 
 function wifiDescription(wifi: number): string {
   switch (wifi) {
-    case WIFI.NO_CREDENTIALS:
-      return "尚未保存 Wi‑Fi";
-    case WIFI.CONNECTING:
-      return "正在连接 Wi‑Fi";
-    case WIFI.CONNECTED:
-      return "Wi‑Fi 已连接";
-    case WIFI.NOT_CONNECTED:
-      return "Wi‑Fi 尚未连接，设备仍在重试";
-    default:
-      return "Wi‑Fi 状态未知";
+    case WIFI.NO_CREDENTIALS: return "尚未保存 Wi‑Fi";
+    case WIFI.CONNECTING: return "正在连接 Wi‑Fi";
+    case WIFI.CONNECTED: return "Wi‑Fi 已连接";
+    case WIFI.NOT_CONNECTED: return "Wi‑Fi 尚未连接，设备仍在重试";
+    default: return "Wi‑Fi 状态未知";
   }
 }
 
-function updateButtons(): void {
-  connectButton.disabled = busy;
-  authButton.disabled = busy || !device?.gatt?.connected;
-  submitButton.disabled = busy || !device?.gatt?.connected;
-  retryButton.disabled = busy;
+function render(): void {
+  const connected = canDisconnect(phase);
+  connectButton.hidden = connected;
+  connectButton.disabled = phase === "connecting";
+  disconnectButton.hidden = !connected;
+  authSection.hidden = !showAuthForm(phase);
+  wifiSection.hidden = !showWifiForm(phase);
+  authButton.disabled = phase !== "auth";
+  submitButton.disabled = phase !== "wifi" && phase !== "done";
+  if (phase === "disconnected") deviceState.textContent = "蓝牙未连接";
 }
 
-function renderStep(): void {
-  for (const panel of panels) panel.hidden = panel.dataset.stepPanel !== step;
-  for (const indicator of indicators) {
-    indicator.setAttribute("aria-current", indicator.dataset.stepIndicator === step ? "step" : "false");
-  }
-  updateButtons();
+function setPhase(next: Phase): void {
+  phase = next;
+  render();
 }
 
-function transition(event: FlowEvent): void {
-  step = nextStep(step, event);
-  renderStep();
+function savedOtaPassword(): string | null {
+  try { return localStorage.getItem(OTA_STORAGE_KEY); }
+  catch { return null; }
+}
+
+function saveOtaPassword(password: string): void {
+  try { localStorage.setItem(OTA_STORAGE_KEY, password); }
+  catch { /* Storage may be unavailable; the current session can continue. */ }
+}
+
+function clearCharacteristics(): void {
+  statusCharacteristic?.removeEventListener("characteristicvaluechanged", onStatusChanged);
+  commandCharacteristic = undefined;
+  statusCharacteristic = undefined;
+  authorized = false;
 }
 
 function onDisconnected(): void {
-  commandCharacteristic = undefined;
-  statusCharacteristic = undefined;
-  deviceState.textContent = "蓝牙已断开";
-  if (!checkingAfterRestart) {
-    transition("disconnected");
-    showStatus("连接已断开。请重新搜索设备。", "error");
+  clearCharacteristics();
+  if (phase === "checking") {
+    deviceState.textContent = "设备重启中，等待蓝牙重连";
+    return;
   }
-  updateButtons();
+  operation?.abort();
+  setPhase("disconnected");
+  showStatus(disconnectMessage(saved, confirmed), saved && !confirmed ? "progress" : "error");
 }
 
-async function connectGatt(): Promise<DeviceStatus> {
+async function connectGatt(signal: AbortSignal): Promise<DeviceStatus> {
   if (!device?.gatt) throw new Error("请先选择设备");
-  statusCharacteristic?.removeEventListener("characteristicvaluechanged", onStatusChanged);
+  clearCharacteristics();
   const server = await device.gatt.connect();
+  signal.throwIfAborted();
   const service = await server.getPrimaryService(SERVICE_UUID);
-  commandCharacteristic = await service.getCharacteristic(COMMAND_UUID);
-  statusCharacteristic = await service.getCharacteristic(STATUS_UUID);
-  statusCharacteristic.addEventListener("characteristicvaluechanged", onStatusChanged);
-  await statusCharacteristic.startNotifications();
-  const status = parseStatus(await statusCharacteristic.readValue());
-  deviceState.textContent = `蓝牙已连接 · ${wifiDescription(status.wifi)}`;
-  updateButtons();
-  return status;
+  signal.throwIfAborted();
+  const command = await service.getCharacteristic(COMMAND_UUID);
+  const status = await service.getCharacteristic(STATUS_UUID);
+  signal.throwIfAborted();
+  commandCharacteristic = command;
+  statusCharacteristic = status;
+  status.addEventListener("characteristicvaluechanged", onStatusChanged);
+  await status.startNotifications();
+  signal.throwIfAborted();
+  const current = parseStatus(await status.readValue());
+  signal.throwIfAborted();
+  deviceState.textContent = `蓝牙已连接 · ${wifiDescription(current.wifi)}`;
+  return current;
 }
 
 function onStatusChanged(event: Event): void {
@@ -124,22 +143,25 @@ function onStatusChanged(event: Event): void {
     const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
     if (!value) return;
     const status = parseStatus(value);
-    deviceState.textContent = `蓝牙已连接 · ${wifiDescription(status.wifi)}`;
-    if (status.result === RESULT.UNAUTHORIZED && !checkingAfterRestart) {
-      transition("unauthorized");
-      showStatus(resultError(status.result), "error");
+    if (device?.gatt?.connected) deviceState.textContent = `蓝牙已连接 · ${wifiDescription(status.wifi)}`;
+    if (status.result === RESULT.SAVED && phase === "submitting") saved = true;
+    if (status.result === RESULT.UNAUTHORIZED && phase !== "checking") {
+      authorized = false;
+      if (phase === "wifi" || phase === "done") {
+        setPhase("auth");
+        showStatus(resultError(status.result), "error");
+      }
     }
   } catch {
-    showStatus("设备返回了不兼容的状态数据", "error");
+    if (phase !== "disconnected") showStatus("设备返回了不兼容的状态数据", "error");
   }
 }
 
-function sendFrame(frame: Frame, number: number, total: number): Promise<void> {
+function sendFrame(frame: Frame, number: number, total: number, signal: AbortSignal): Promise<void> {
   const replyCharacteristic = statusCharacteristic;
   const requestCharacteristic = commandCharacteristic;
-  if (!replyCharacteristic || !requestCharacteristic) {
-    return Promise.reject(new Error("蓝牙连接已断开"));
-  }
+  if (!replyCharacteristic || !requestCharacteristic) return Promise.reject(new Error("蓝牙连接已断开"));
+  signal.throwIfAborted();
   return new Promise<void>((resolve, reject) => {
     let finished = false;
     let writeDone = false;
@@ -149,6 +171,7 @@ function sendFrame(frame: Frame, number: number, total: number): Promise<void> {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
       replyCharacteristic.removeEventListener("characteristicvaluechanged", onReply);
       if (error) reject(error);
       else resolve();
@@ -173,51 +196,73 @@ function sendFrame(frame: Frame, number: number, total: number): Promise<void> {
         finish(error instanceof Error ? error : new Error(String(error)));
       }
     };
+    const onAbort = () => finish(new DOMException("操作已取消", "AbortError"));
     const timer = setTimeout(() => finish(new Error(`第 ${number}/${total} 个数据包等待设备响应超时`)), 8000);
+    signal.addEventListener("abort", onAbort, { once: true });
     replyCharacteristic.addEventListener("characteristicvaluechanged", onReply);
     requestCharacteristic.writeValueWithResponse(new Uint8Array(frame.bytes)).then(
-      () => {
-        writeDone = true;
-        finishIfComplete();
-      },
+      () => { writeDone = true; finishIfComplete(); },
       (error: unknown) => finish(error instanceof Error ? error : new Error(String(error))),
     );
   });
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("操作已取消", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
-async function checkAfterRestart(): Promise<void> {
-  checkingAfterRestart = true;
-  showStatus("凭据已保存，等待设备重启并连接 Wi‑Fi…", "progress");
-  await sleep(2500);
+async function authenticate(password: string, signal: AbortSignal): Promise<void> {
+  const frame = createAuthFrame(password);
+  try {
+    await sendFrame(frame, 1, 1, signal);
+    signal.throwIfAborted();
+    authorized = true;
+    saveOtaPassword(password);
+  } finally {
+    frame.bytes.fill(0);
+  }
+}
+
+async function checkAfterRestart(signal: AbortSignal): Promise<void> {
+  showStatus("信息已保存，等待设备重启并连接 Wi‑Fi…", "progress");
+  await sleep(2500, signal);
   if (device?.gatt?.connected) {
     device.gatt.disconnect();
-    await sleep(500);
+    await sleep(500, signal);
   }
   if (!device?.gatt) throw new Error("设备已不可用");
 
   const deadline = Date.now() + 65000;
   let lastError: unknown;
   while (Date.now() < deadline) {
+    signal.throwIfAborted();
     try {
-      const status =
-        device.gatt.connected && statusCharacteristic
-          ? parseStatus(await statusCharacteristic.readValue())
-          : await connectGatt();
-      if (status.wifi === WIFI.CONNECTED) {
-        showStatus("配网成功，设备已连接 Wi‑Fi。", "success");
-        return;
-      }
+      const status = device.gatt.connected && statusCharacteristic
+        ? parseStatus(await statusCharacteristic.readValue())
+        : await connectGatt(signal);
+      signal.throwIfAborted();
+      if (status.wifi === WIFI.CONNECTED) return;
       if (status.wifi === WIFI.NOT_CONNECTED) {
         throw new Error("设备仍未连接 Wi‑Fi。请核对网络名称和密码后重新配置。");
       }
       showStatus(`设备已重启，${wifiDescription(status.wifi)}…`, "progress");
-      await sleep(3000);
+      await sleep(3000, signal);
     } catch (error) {
+      if (signal.aborted) throw error;
       if (error instanceof Error && error.message.startsWith("设备仍未连接 Wi‑Fi")) throw error;
       lastError = error;
-      await sleep(2500);
+      await sleep(2500, signal);
     }
   }
   throw new Error(`等待 Wi‑Fi 连接超时，可重新配置${lastError ? `（${errorMessage(lastError)}）` : ""}`);
@@ -228,105 +273,143 @@ connectButton.addEventListener("click", async () => {
     showStatus("当前浏览器不支持 Web Bluetooth。请在 HTTPS 或 localhost 页面使用 Chrome 或 Edge。", "error");
     return;
   }
+  const controller = new AbortController();
+  operation = controller;
+  setPhase("connecting");
+  showStatus("请在浏览器弹出的列表中选择设备…", "progress");
   try {
-    busy = true;
-    updateButtons();
-    showStatus("请在浏览器弹出的列表中选择设备…", "progress");
     if (device) {
       device.removeEventListener("gattserverdisconnected", onDisconnected);
       if (device.gatt?.connected) device.gatt.disconnect();
     }
     device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+    controller.signal.throwIfAborted();
     device.addEventListener("gattserverdisconnected", onDisconnected);
     deviceName.textContent = device.name || "未命名设备";
-    authDeviceDescription.textContent = device.name || "设备";
-    const status = await connectGatt();
-    transition("connected");
-    showStatus(`已连接 ${device.name || "设备"}。${wifiDescription(status.wifi)}。请输入 OTA 密码。`, "success");
-    otaInput.focus();
+    saved = false;
+    confirmed = false;
+    const status = await connectGatt(controller.signal);
+    setPhase("auth");
+    const stored = savedOtaPassword();
+    if (stored) {
+      setPhase("authenticating");
+      showStatus("正在使用已保存的 OTA 密码验证…", "progress");
+      try {
+        await authenticate(stored, controller.signal);
+        controller.signal.throwIfAborted();
+        setPhase("wifi");
+        showStatus(`已连接 ${device.name || "设备"}。${wifiDescription(status.wifi)}，可修改 Wi‑Fi 信息。`, "success");
+        ssidInput.focus();
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        setPhase("auth");
+        showStatus(`自动验证失败：${errorMessage(error)}。请重新输入 OTA 密码。`, "error");
+        otaInput.focus();
+      }
+    } else {
+      showStatus(`已连接 ${device.name || "设备"}。请验证 OTA 密码。`, "success");
+      otaInput.focus();
+    }
   } catch (error) {
+    if (controller.signal.aborted) return;
+    setPhase("disconnected");
     if (error instanceof Error && error.name === "NotFoundError") {
       showStatus("未选择设备。请靠近设备后重试。", "error");
     } else {
       showStatus(`连接失败：${errorMessage(error)}`, "error");
     }
   } finally {
-    busy = false;
-    updateButtons();
+    if (operation === controller) operation = undefined;
   }
+});
+
+disconnectButton.addEventListener("click", () => {
+  if (!canDisconnect(phase)) return;
+  operation?.abort();
+  operation = undefined;
+  const oldDevice = device;
+  oldDevice?.removeEventListener("gattserverdisconnected", onDisconnected);
+  clearCharacteristics();
+  device = undefined;
+  setPhase("disconnected");
+  showStatus(disconnectMessage(saved, confirmed), saved && !confirmed ? "progress" : "");
+  if (oldDevice?.gatt?.connected) oldDevice.gatt.disconnect();
 });
 
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (busy || step !== "auth" || !device?.gatt?.connected) return;
-  let frame: Frame | undefined;
+  if (phase !== "auth" || !device?.gatt?.connected) return;
+  const controller = new AbortController();
+  operation = controller;
+  setPhase("authenticating");
+  showStatus("正在验证 OTA 密码…", "progress");
   try {
-    frame = createAuthFrame(otaInput.value);
-    busy = true;
-    updateButtons();
-    showStatus("正在验证 OTA 密码…", "progress");
-    await sendFrame(frame, 1, 1);
-    transition("authenticated");
-    showStatus("密码已验证。请填写 Wi‑Fi 信息。", "success");
+    await authenticate(otaInput.value, controller.signal);
+    controller.signal.throwIfAborted();
+    otaInput.value = "";
+    setPhase("wifi");
+    showStatus("验证成功，可以修改 Wi‑Fi 信息。", "success");
     ssidInput.focus();
   } catch (error) {
+    if (controller.signal.aborted) return;
+    setPhase(device?.gatt?.connected ? "auth" : "disconnected");
     showStatus(`验证失败：${errorMessage(error)}`, "error");
-    if (!device?.gatt?.connected) transition("disconnected");
   } finally {
-    frame?.bytes.fill(0);
-    otaInput.value = "";
-    busy = false;
-    updateButtons();
+    if (operation === controller) operation = undefined;
   }
 });
 
 provisionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (busy || step !== "wifi" || !device?.gatt?.connected) return;
+  if ((phase !== "wifi" && phase !== "done") || !device?.gatt?.connected) return;
+  const controller = new AbortController();
+  operation = controller;
   let frames: Frame[] = [];
-  let saved = false;
+  saved = false;
+  confirmed = false;
+  setPhase("submitting");
   try {
     frames = createProvisionFrames(ssidInput.value, wifiInput.value);
-    busy = true;
-    transition("submitting");
-    for (const [index, frame] of frames.entries()) {
-      showStatus(`正在向设备发送配网信息（${index + 1}/${frames.length}）…`, "progress");
-      await sendFrame(frame, index + 1, frames.length);
+    if (!authorized) {
+      const stored = savedOtaPassword();
+      if (!stored) throw new Error("请重新验证 OTA 密码");
+      showStatus("正在重新验证 OTA 密码…", "progress");
+      await authenticate(stored, controller.signal);
     }
-    saved = true;
-    ssidInput.value = "";
-    wifiInput.value = "";
-    await checkAfterRestart();
+    for (const [index, frame] of frames.entries()) {
+      controller.signal.throwIfAborted();
+      showStatus(`正在发送 Wi‑Fi 信息（${index + 1}/${frames.length}）…`, "progress");
+      await sendFrame(frame, index + 1, frames.length, controller.signal);
+      if (frame.expected === RESULT.SAVED) saved = true;
+    }
+    controller.signal.throwIfAborted();
+    authorized = false;
+    setPhase("checking");
+    await checkAfterRestart(controller.signal);
+    controller.signal.throwIfAborted();
+    confirmed = true;
+    setPhase("done");
+    showStatus("配网成功，设备已连接 Wi‑Fi。", "success");
   } catch (error) {
-    if (error instanceof DeviceResultError && error.result === RESULT.UNAUTHORIZED) {
-      transition("unauthorized");
-    } else if (!saved && !device?.gatt?.connected) {
-      transition("disconnected");
-    } else if (!saved) {
-      step = "wifi";
-      renderStep();
+    if (controller.signal.aborted) return;
+    if (error instanceof DeviceResultError && error.result === RESULT.UNAUTHORIZED) authorized = false;
+    if (!device?.gatt?.connected) {
+      setPhase("disconnected");
+    } else if (error instanceof DeviceResultError && error.result === RESULT.UNAUTHORIZED) {
+      setPhase("auth");
+    } else if (error instanceof DeviceResultError && error.result === RESULT.BAD_AUTH) {
+      setPhase("auth");
+    } else {
+      setPhase("wifi");
     }
     showStatus(`配网未完成：${errorMessage(error)}`, "error");
   } finally {
-    checkingAfterRestart = false;
     for (const frame of frames) frame.bytes.fill(0);
-    busy = false;
-    updateButtons();
+    if (operation === controller) operation = undefined;
   }
 });
 
-retryButton.addEventListener("click", () => {
-  if (device?.gatt?.connected) {
-    transition("retry");
-    showStatus("请重新输入 OTA 密码，然后填写 Wi‑Fi 信息。", "");
-    otaInput.focus();
-  } else {
-    transition("disconnected");
-    showStatus("请重新连接设备。", "");
-  }
-});
-
-renderStep();
+render();
 if (!("bluetooth" in navigator)) {
   showStatus("当前浏览器不支持 Web Bluetooth。请在 HTTPS 或 localhost 页面使用 Chrome 或 Edge。", "error");
 }

@@ -1,19 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nextStep } from "../src/flow.ts";
+import { canDisconnect, disconnectMessage, showAuthForm, showWifiForm } from "../src/flow.ts";
 
-test("连接、认证、提交和重新配置依次推进", () => {
-  assert.equal(nextStep("connect", "authenticated"), "connect");
-  assert.equal(nextStep("connect", "connected"), "auth");
-  assert.equal(nextStep("auth", "submitting"), "auth");
-  assert.equal(nextStep("auth", "authenticated"), "wifi");
-  assert.equal(nextStep("wifi", "submitting"), "result");
-  assert.equal(nextStep("result", "retry"), "auth");
+test("连接区始终可见，认证和 Wi‑Fi 表单按需展开", () => {
+  assert.equal(canDisconnect("disconnected"), false);
+  assert.equal(canDisconnect("connecting"), false);
+  for (const phase of ["auth", "authenticating", "wifi", "submitting", "checking", "done"] as const) {
+    assert.equal(canDisconnect(phase), true);
+  }
+  assert.equal(showAuthForm("auth"), true);
+  assert.equal(showAuthForm("authenticating"), true);
+  assert.equal(showAuthForm("wifi"), false);
+  assert.equal(showWifiForm("auth"), false);
+  for (const phase of ["wifi", "submitting", "checking", "done"] as const) {
+    assert.equal(showWifiForm(phase), true);
+  }
 });
 
-test("断线和授权过期退回安全步骤", () => {
-  for (const step of ["connect", "auth", "wifi", "result"] as const) {
-    assert.equal(nextStep(step, "disconnected"), "connect");
-    assert.equal(nextStep(step, "unauthorized"), "auth");
-  }
+test("断开后区分未保存、已保存未核实与已确认", () => {
+  assert.match(disconnectMessage(false, false), /蓝牙已断开/);
+  assert.match(disconnectMessage(true, false), /结果尚未核实/);
+  assert.match(disconnectMessage(true, true), /配网成功/);
 });

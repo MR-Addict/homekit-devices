@@ -4,7 +4,7 @@
 
 目标电脑需在 BIOS 与网卡设置中开启 Wake-on-LAN，并与 ESP32 处于同一局域网。
 
-固件会广播 `HS-WOL-xxxx` BLE 配网服务。使用项目的通用配网页面连接设备，先验证 OTA 密码 `ota`，再设置 Wi‑Fi。页面的本地运行与 GitHub Pages 地址见项目总 README。
+固件会广播 `HS-WOL-xxxx` BLE 配网服务。使用项目的通用配网页面连接设备，首次验证 OTA 密码 `ota` 后设置 Wi‑Fi；验证成功的密码会保存在当前浏览器，后续连接时自动验证。页面的本地运行与 GitHub Pages 地址见项目总 README。
 
 ## 添加要唤醒的电脑
 
