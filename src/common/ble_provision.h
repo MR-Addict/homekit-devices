@@ -16,6 +16,7 @@ class HSBleProvision {
   static constexpr const char *SERVICE_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c832";
   static constexpr const char *COMMAND_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c833";
   static constexpr const char *STATUS_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c834";
+  static constexpr const char *CREDENTIALS_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c835";
   static constexpr uint8_t PROTOCOL_VERSION = 1;
   static constexpr size_t MAX_FRAME = 20;
   static constexpr size_t MAX_SSID_BYTES = 32;
@@ -56,8 +57,21 @@ class HSBleProvision {
       owner.enqueue(event);
     }
     void onDisconnect(NimBLEServer *, NimBLEConnInfo &info, int) override {
+      owner.authorizedConnection.store(UINT16_MAX);
       Event event = {DISCONNECT, info.getConnHandle(), 0, {0}};
       owner.enqueue(event);
+    }
+  };
+
+  class CredentialsCallbacks : public NimBLECharacteristicCallbacks {
+    HSBleProvision &owner;
+
+  public:
+    explicit CredentialsCallbacks(HSBleProvision &owner) : owner(owner) {}
+    void onRead(NimBLECharacteristic *characteristic, NimBLEConnInfo &info) override {
+      if (owner.authorizedConnection.load() != info.getConnHandle()) {
+        characteristic->setValue(static_cast<const uint8_t *>(nullptr), 0);
+      }
     }
   };
 
@@ -83,7 +97,9 @@ class HSBleProvision {
   TaskHandle_t autoPollTask = nullptr;
   NimBLEServer *server = nullptr;
   NimBLECharacteristic *status = nullptr;
+  NimBLECharacteristic *storedCredentials = nullptr;
   std::atomic<bool> queueFull{false};
+  std::atomic<uint16_t> authorizedConnection{UINT16_MAX};
   bool connected = false;
   bool authorized = false;
   bool receiving = false;
@@ -113,8 +129,46 @@ class HSBleProvision {
   }
 
   void clearSession() {
+    authorizedConnection.store(UINT16_MAX);
+    if (storedCredentials) storedCredentials->setValue(static_cast<const uint8_t *>(nullptr), 0);
     authorized = false;
     clearTransfer();
+  }
+
+  void loadStoredCredentials() {
+    struct WifiData {
+      char ssid[MAX_SSID_BYTES + 1];
+      char password[MAX_PASSWORD_BYTES + 1];
+    } data = {};
+    uint8_t value[3 + MAX_SSID_BYTES + MAX_PASSWORD_BYTES] = {PROTOCOL_VERSION, 0, 0};
+    nvs_handle_t handle;
+    esp_err_t result;
+    {
+      std::lock_guard<std::shared_mutex> lock(homeSpan.getMutex());
+      result = nvs_open("WIFI", NVS_READONLY, &handle);
+      if (result == ESP_OK) {
+        size_t length = sizeof(data);
+        result = nvs_get_blob(handle, "WIFIDATA", &data, &length);
+        nvs_close(handle);
+        if (result == ESP_OK && length != sizeof(data)) result = ESP_ERR_INVALID_SIZE;
+      }
+    }
+    if (result == ESP_ERR_NVS_NOT_FOUND) {
+      storedCredentials->setValue(value, 3);
+    } else if (result == ESP_OK) {
+      size_t ssidSize = strnlen(data.ssid, sizeof(data.ssid));
+      size_t passwordSize = strnlen(data.password, sizeof(data.password));
+      if (ssidSize <= MAX_SSID_BYTES && passwordSize <= MAX_PASSWORD_BYTES &&
+          (ssidSize > 0 || passwordSize == 0)) {
+        value[1] = ssidSize;
+        value[2] = passwordSize;
+        memcpy(value + 3, data.ssid, ssidSize);
+        memcpy(value + 3 + ssidSize, data.password, passwordSize);
+        storedCredentials->setValue(value, 3 + ssidSize + passwordSize);
+      }
+    }
+    memset(&data, 0, sizeof(data));
+    memset(value, 0, sizeof(value));
   }
 
   uint8_t wifiState() {
@@ -153,6 +207,8 @@ class HSBleProvision {
         return;
       }
       authorized = true;
+      loadStoredCredentials();
+      authorizedConnection.store(connection);
       publish(AUTH_OK);
       return;
     }
@@ -232,18 +288,19 @@ public:
     char name[20];
     snprintf(name, sizeof(name), "%s-%04X", namePrefix, (unsigned)(ESP.getEfuseMac() & 0xFFFF));
     NimBLEDevice::init(name);
-    NimBLEDevice::setSecurityAuth(true, false, true);
-    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
     server = NimBLEDevice::createServer();
     server->setCallbacks(new ServerCallbacks(*this));
     server->advertiseOnDisconnect(true);
     NimBLEService *service = server->createService(SERVICE_UUID);
     NimBLECharacteristic *command = service->createCharacteristic(
-        COMMAND_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_ENC);
+        COMMAND_UUID, NIMBLE_PROPERTY::WRITE);
     command->setCallbacks(new CommandCallbacks(*this));
     status = service->createCharacteristic(
         STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+    storedCredentials = service->createCharacteristic(
+        CREDENTIALS_UUID, NIMBLE_PROPERTY::READ);
+    storedCredentials->setCallbacks(new CredentialsCallbacks(*this));
     publish(READY);
     service->start();
 

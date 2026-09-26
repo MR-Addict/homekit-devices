@@ -1,6 +1,7 @@
 export const SERVICE_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c832";
 export const COMMAND_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c833";
 export const STATUS_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c834";
+export const CREDENTIALS_UUID = "8f4c69c0-8c56-4bd9-9862-c45913a1c835";
 export const VERSION = 1;
 
 export const RESULT = {
@@ -26,6 +27,7 @@ export const WIFI = {
 const OP = { AUTH: 1, BEGIN: 2, DATA: 3, COMMIT: 4 } as const;
 const MAX_DATA_BYTES = 17;
 const encoder = new TextEncoder();
+const decoder = new TextDecoder("utf-8", { fatal: true });
 
 export interface Frame {
   bytes: Uint8Array;
@@ -35,6 +37,11 @@ export interface Frame {
 export interface DeviceStatus {
   result: number;
   wifi: number;
+}
+
+export interface WifiCredentials {
+  ssid: string;
+  password: string;
 }
 
 function frame(opcode: number, sequence: number, payload = new Uint8Array()): Uint8Array {
@@ -92,6 +99,36 @@ export function parseStatus(value: DataView | Uint8Array): DeviceStatus {
     throw new Error("设备返回了不兼容的 BLE 协议状态");
   }
   return { result: bytes[1]!, wifi: bytes[2]! };
+}
+
+export function parseWifiCredentials(value: DataView | Uint8Array): WifiCredentials {
+  const bytes = value instanceof DataView ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : value;
+  if (bytes.length < 3 || bytes[0] !== VERSION) throw new Error("设备返回了不兼容的 Wi‑Fi 配置");
+  const ssidLength = bytes[1]!;
+  const passwordLength = bytes[2]!;
+  if (ssidLength > 32 || passwordLength > 64 || bytes.length !== 3 + ssidLength + passwordLength ||
+      (ssidLength === 0 && passwordLength !== 0) || bytes.includes(0, 3)) {
+    throw new Error("设备返回的 Wi‑Fi 配置无效");
+  }
+  try {
+    return {
+      ssid: decoder.decode(bytes.subarray(3, 3 + ssidLength)),
+      password: decoder.decode(bytes.subarray(3 + ssidLength)),
+    };
+  } catch {
+    throw new Error("设备返回的 Wi‑Fi 配置不是有效的 UTF‑8 文本");
+  }
+}
+
+export async function readWifiCredentials(service: Pick<BluetoothRemoteGATTService, "getCharacteristic">): Promise<WifiCredentials | null> {
+  let characteristic: BluetoothRemoteGATTCharacteristic;
+  try {
+    characteristic = await service.getCharacteristic(CREDENTIALS_UUID);
+  } catch (error) {
+    if (error instanceof Error && error.name === "NotFoundError") return null;
+    throw error;
+  }
+  return parseWifiCredentials(await characteristic.readValue());
 }
 
 export function resultError(result: number): string {

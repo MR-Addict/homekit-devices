@@ -8,6 +8,7 @@ import {
   createAuthFrame,
   createProvisionFrames,
   parseStatus,
+  readWifiCredentials,
   resultError,
   type Frame,
   type DeviceStatus,
@@ -99,6 +100,29 @@ function saveOtaPassword(password: string): void {
   catch { /* Storage may be unavailable; the current session can continue. */ }
 }
 
+function clearWifiInputs(): void {
+  ssidInput.value = "";
+  wifiInput.value = "";
+}
+
+async function fillCurrentWifiCredentials(signal: AbortSignal): Promise<string> {
+  clearWifiInputs();
+  if (!device?.gatt?.connected || !commandCharacteristic) throw new Error("蓝牙连接已断开");
+  try {
+    const service = await device.gatt.getPrimaryService(SERVICE_UUID);
+    signal.throwIfAborted();
+    const credentials = await readWifiCredentials(service);
+    signal.throwIfAborted();
+    if (!credentials) return "设备固件不支持读取当前 Wi‑Fi 信息，请手动填写。";
+    ssidInput.value = credentials.ssid;
+    wifiInput.value = credentials.password;
+    return credentials.ssid ? "已回填设备当前的 Wi‑Fi 信息。" : "设备尚未保存 Wi‑Fi 信息，请填写网络名称和密码。";
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return `无法读取当前 Wi‑Fi 信息（${errorMessage(error)}），请手动填写。`;
+  }
+}
+
 function clearCharacteristics(): void {
   statusCharacteristic?.removeEventListener("characteristicvaluechanged", onStatusChanged);
   commandCharacteristic = undefined;
@@ -108,6 +132,7 @@ function clearCharacteristics(): void {
 
 function onDisconnected(): void {
   clearCharacteristics();
+  clearWifiInputs();
   if (phase === "checking") {
     deviceState.textContent = "设备重启中，等待蓝牙重连";
     return;
@@ -147,6 +172,7 @@ function onStatusChanged(event: Event): void {
     if (status.result === RESULT.SAVED && phase === "submitting") saved = true;
     if (status.result === RESULT.UNAUTHORIZED && phase !== "checking") {
       authorized = false;
+      clearWifiInputs();
       if (phase === "wifi" || phase === "done") {
         setPhase("auth");
         showStatus(resultError(status.result), "error");
@@ -278,6 +304,7 @@ connectButton.addEventListener("click", async () => {
   setPhase("connecting");
   showStatus("请在浏览器弹出的列表中选择设备…", "progress");
   try {
+    clearWifiInputs();
     if (device) {
       device.removeEventListener("gattserverdisconnected", onDisconnected);
       if (device.gatt?.connected) device.gatt.disconnect();
@@ -297,8 +324,9 @@ connectButton.addEventListener("click", async () => {
       try {
         await authenticate(stored, controller.signal);
         controller.signal.throwIfAborted();
+        const credentialsMessage = await fillCurrentWifiCredentials(controller.signal);
         setPhase("wifi");
-        showStatus(`已连接 ${device.name || "设备"}。${wifiDescription(status.wifi)}，可修改 Wi‑Fi 信息。`, "success");
+        showStatus(`已连接 ${device.name || "设备"}。${wifiDescription(status.wifi)}。${credentialsMessage}`, "success");
         ssidInput.focus();
       } catch (error) {
         if (controller.signal.aborted) throw error;
@@ -330,6 +358,7 @@ disconnectButton.addEventListener("click", () => {
   const oldDevice = device;
   oldDevice?.removeEventListener("gattserverdisconnected", onDisconnected);
   clearCharacteristics();
+  clearWifiInputs();
   device = undefined;
   setPhase("disconnected");
   showStatus(disconnectMessage(saved, confirmed), saved && !confirmed ? "progress" : "");
@@ -347,8 +376,9 @@ authForm.addEventListener("submit", async (event) => {
     await authenticate(otaInput.value, controller.signal);
     controller.signal.throwIfAborted();
     otaInput.value = "";
+    const credentialsMessage = await fillCurrentWifiCredentials(controller.signal);
     setPhase("wifi");
-    showStatus("验证成功，可以修改 Wi‑Fi 信息。", "success");
+    showStatus(`验证成功。${credentialsMessage}`, "success");
     ssidInput.focus();
   } catch (error) {
     if (controller.signal.aborted) return;
