@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <freertos/task.h>
 #include <atomic>
 #include <mutex>
 
@@ -79,6 +80,7 @@ class HSBleProvision {
   };
 
   QueueHandle_t events = nullptr;
+  TaskHandle_t autoPollTask = nullptr;
   NimBLEServer *server = nullptr;
   NimBLECharacteristic *status = nullptr;
   std::atomic<bool> queueFull{false};
@@ -251,6 +253,29 @@ public:
     advertising->enableScanResponse(true);
     advertising->start();
     Serial.printf("BLE provisioning ready: %s\n", name);
+  }
+
+  void autoPoll(uint32_t stackSize = 8192, UBaseType_t priority = 1, BaseType_t core = 0) {
+    if (!events || !server) {
+      Serial.println("BLE provisioning: cannot start auto-poll before begin");
+      return;
+    }
+    if (autoPollTask) return;
+
+    BaseType_t result = xTaskCreateUniversal(
+        [](void *context) {
+          auto *provision = static_cast<HSBleProvision *>(context);
+          const TickType_t interval = pdMS_TO_TICKS(10) ? pdMS_TO_TICKS(10) : 1;
+          for (;;) {
+            provision->poll();
+            vTaskDelay(interval);
+          }
+        },
+        "bleProvision", stackSize, this, priority, &autoPollTask, core);
+    if (result != pdPASS) {
+      autoPollTask = nullptr;
+      Serial.println("BLE provisioning: cannot create auto-poll task");
+    }
   }
 
   void poll() {

@@ -18,10 +18,8 @@ void setup() {
   new HSTableLamp(25, 26, 27, 15);
 
   bleProvision.begin("HS-Lamp");
+  bleProvision.autoPoll();
   homeSpan.autoPoll();
 }
 
-void loop() {
-  bleProvision.poll();
-  delay(10);
-}
+void loop() {}

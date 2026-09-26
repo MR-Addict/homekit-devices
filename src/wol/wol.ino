@@ -30,10 +30,8 @@ void setup() {
   new HSWOL("74:56:3C:D3:65:74");
 
   bleProvision.begin("HS-WOL");
+  bleProvision.autoPoll();
   homeSpan.autoPoll();
 }
 
-void loop() {
-  bleProvision.poll();
-  delay(10);
-}
+void loop() {}

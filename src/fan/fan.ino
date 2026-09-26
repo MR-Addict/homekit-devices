@@ -18,10 +18,8 @@ void setup() {
   new HSFan(4, 3);
 
   bleProvision.begin("HS-Fan");
+  bleProvision.autoPoll();
   homeSpan.autoPoll();
 }
 
-void loop() {
-  bleProvision.poll();
-  delay(10);
-}
+void loop() {}
