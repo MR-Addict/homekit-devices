@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canDisconnect, disconnectMessage, showAuthForm, showWifiForm } from "../src/flow.ts";
+import { canDisconnect, disconnectMessage, showAuthForm, showWifiForm } from "../src/workflows/flow.ts";
 
 test("连接区始终可见，认证和 Wi‑Fi 表单按需展开", () => {
   assert.equal(canDisconnect("disconnected"), false);

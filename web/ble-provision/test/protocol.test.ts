@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAuthFrame, createProvisionFrames, parseStatus, parseWifiCredentials, readWifiCredentials, RESULT, WIFI } from "../src/protocol.ts";
+import { RESULT, WIFI } from "../src/protocol/constants.ts";
+import { createAuthFrame, createProvisionFrames } from "../src/protocol/frames.ts";
+import { parseStatus, parseWifiCredentials } from "../src/protocol/status.ts";
+import { readWifiCredentials } from "../src/services/credentials.ts";
 
 test("OTA 密码单独验证，数据包不超过默认 BLE 写入长度", () => {
   const auth = createAuthFrame("ota");
