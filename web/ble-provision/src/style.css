@@ -16,56 +16,21 @@ button, input { font: inherit; }
   padding: clamp(32px, 7vh, 72px) 0 48px;
 }
 
-.brand {
+.page-header {
   display: flex;
   align-items: center;
-  gap: 9px;
-  color: #54715a;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .14em;
+  gap: 15px;
+  margin-bottom: 24px;
 }
-
+.header-logo { flex: none; width: 48px; height: 48px; }
+.header-copy { min-width: 0; }
 .page-header h1 {
-  margin: 28px 0 8px;
-  font-size: clamp(29px, 5vw, 36px);
+  margin: 0 0 3px;
+  font-size: clamp(24px, 5vw, 28px);
   line-height: 1.2;
-  letter-spacing: -.045em;
+  letter-spacing: -.035em;
 }
-.page-header p { margin: 0; color: #687a6d; font-size: 15px; line-height: 1.6; }
-
-.steps { margin: 36px 0 20px; }
-.steps ol {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.steps li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #859389;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.step-number {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #e9eeea;
-  font-size: 12px;
-  font-weight: 700;
-}
-.steps li[data-state="current"] { color: #1b5632; font-weight: 700; }
-.steps li[data-state="current"] .step-number { color: #fff; background: #22643e; }
-.steps li[data-state="complete"] { color: #477557; }
-.steps li[data-state="complete"] .step-number { color: #22643e; background: #dcecdf; }
+.page-header p { margin: 0; color: #687a6d; font-size: 14px; line-height: 1.5; }
 
 .setup-surface {
   overflow: hidden;
@@ -190,10 +155,10 @@ footer { margin: 18px 3px 0; color: #7d8d80; font-size: 12px; line-height: 1.6; 
 
 @media (max-width: 480px) {
   .shell { width: min(100% - 28px, 560px); padding-top: 25px; }
-  .page-header h1 { margin-top: 24px; }
-  .steps { margin-top: 30px; }
-  .steps li { gap: 5px; font-size: 11px; }
-  .step-number { width: 22px; height: 22px; }
+  .page-header { gap: 12px; margin-bottom: 20px; }
+  .header-logo { width: 42px; height: 42px; }
+  .page-header h1 { font-size: 23px; }
+  .page-header p { font-size: 12px; }
   .panel { padding: 27px 20px; }
   .device-summary { padding: 15px 20px; }
   .status { padding: 14px 20px 18px; }

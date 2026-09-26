@@ -11,21 +11,12 @@
   <body>
     <main class="shell">
       <header class="page-header">
-        <div class="brand">
-          <img src="./logo.svg" alt="" width="32" height="32">
-          <span>HOME DEVICES</span>
+        <img class="header-logo" src="./logo.svg" alt="" width="48" height="48">
+        <div class="header-copy">
+          <h1>设置设备 Wi‑Fi</h1>
+          <p>连接附近设备并填写网络信息</p>
         </div>
-        <h1>设置设备 Wi‑Fi</h1>
-        <p>连接附近设备，填写网络信息，完成设置。</p>
       </header>
-
-      <nav class="steps" aria-label="设置进度">
-        <ol>
-          <li data-step="1"><span class="step-number">1</span><span>连接设备</span></li>
-          <li data-step="2"><span class="step-number">2</span><span>验证密码</span></li>
-          <li data-step="3"><span class="step-number">3</span><span>设置 Wi‑Fi</span></li>
-        </ol>
-      </nav>
 
       <div class="setup-surface">
         <div id="device-summary" class="device-summary" hidden>
@@ -70,7 +61,7 @@
         <section id="success-section" class="panel success-panel" aria-labelledby="success-heading" hidden>
           <div class="success-icon" aria-hidden="true">✓</div>
           <h2 id="success-heading">设置完成</h2>
-          <p><strong id="success-device-name">设备</strong> 已连接 Wi‑Fi。</p>
+          <p><strong id="success-device-name">设备</strong> 的 Wi‑Fi 信息已保存，设备将重启并尝试连接。</p>
           <button id="another-button" class="button primary" type="button">配置另一台设备</button>
         </section>
 

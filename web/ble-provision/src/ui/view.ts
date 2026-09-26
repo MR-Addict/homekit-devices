@@ -1,5 +1,5 @@
 import { WIFI } from "../protocol/constants.ts";
-import { canDisconnect, currentStep, showAuthForm, showConnectPanel, showSuccessPanel, showWifiForm, type Phase } from "../workflows/flow.ts";
+import { canDisconnect, showAuthForm, showConnectPanel, showSuccessPanel, showWifiForm, type Phase } from "../workflows/flow.ts";
 
 function element<T extends HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -35,7 +35,6 @@ export class ProvisionView {
   private readonly successDeviceName = element<HTMLElement>("#success-device-name");
   private readonly deviceState = element<HTMLElement>("#device-state");
   private readonly statusElement = element<HTMLElement>("#status");
-  private readonly steps = document.querySelectorAll<HTMLElement>(".steps li");
   private readonly otaInput = element<HTMLInputElement>("#ota-password");
   private readonly ssidInput = element<HTMLInputElement>("#ssid");
   private readonly wifiInput = element<HTMLInputElement>("#wifi-password");
@@ -61,14 +60,7 @@ export class ProvisionView {
     this.authButton.disabled = phase !== "auth";
     this.submitButton.disabled = phase !== "wifi" && phase !== "done";
     this.authButton.textContent = phase === "authenticating" ? "正在验证…" : "验证密码";
-    this.submitButton.textContent = phase === "submitting" ? "正在保存…" : phase === "checking" ? "正在确认连接…" : "保存并连接";
-    const step = currentStep(phase);
-    this.steps.forEach((item, index) => {
-      const number = index + 1;
-      item.dataset.state = phase === "done" || number < step ? "complete" : number === step ? "current" : "upcoming";
-      if (number === step && phase !== "done") item.setAttribute("aria-current", "step");
-      else item.removeAttribute("aria-current");
-    });
+    this.submitButton.textContent = phase === "submitting" ? "正在保存…" : "保存并连接";
     if (phase === "disconnected") this.deviceState.textContent = "蓝牙未连接";
   }
 

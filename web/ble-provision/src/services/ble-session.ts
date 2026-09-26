@@ -25,8 +25,6 @@ export class BleSession {
   get connected(): boolean { return !!this.device?.gatt?.connected; }
   get name(): string { return this.device?.name || "设备"; }
   get displayName(): string { return this.device?.name || "未命名设备"; }
-  get available(): boolean { return !!this.device?.gatt; }
-  get canReadStatus(): boolean { return this.connected && !!this.status; }
 
   async selectDevice(signal: AbortSignal): Promise<void> {
     if (this.device) {
@@ -72,13 +70,6 @@ export class BleSession {
     if (!this.command || !this.status) return Promise.reject(new Error("蓝牙连接已断开"));
     return sendFrame(this.command, this.status, frame, number, total, signal);
   }
-
-  async readStatus(): Promise<DeviceStatus> {
-    if (!this.status) throw new Error("蓝牙连接已断开");
-    return parseStatus(await this.status.readValue());
-  }
-
-  disconnectGatt(): void { this.device?.gatt?.disconnect(); }
 
   disconnect(): void {
     const oldDevice = this.device;

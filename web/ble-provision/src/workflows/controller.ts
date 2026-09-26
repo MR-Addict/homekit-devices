@@ -1,9 +1,8 @@
-import { RESULT, WIFI } from "../protocol/constants.ts";
+import { RESULT } from "../protocol/constants.ts";
 import { createAuthFrame, createProvisionFrames, type Frame } from "../protocol/frames.ts";
 import { resultError, type DeviceStatus } from "../protocol/status.ts";
 import { BleSession } from "../services/ble-session.ts";
 import { savedOtaPassword, saveOtaPassword } from "../services/ota-storage.ts";
-import { checkAfterRestart } from "../services/restart.ts";
 import { DeviceResultError } from "../services/send-frame.ts";
 import { ProvisionView, wifiDescription } from "../ui/view.ts";
 import { canDisconnect, disconnectMessage, type Phase } from "./flow.ts";
@@ -17,8 +16,6 @@ export class ProvisionController {
   private phase: Phase = "disconnected";
   private operation: AbortController | undefined;
   private authorized = false;
-  private saved = false;
-  private confirmed = false;
   private readonly session = new BleSession(
     (status) => this.onStatus(status),
     () => this.onDisconnected(),
@@ -48,8 +45,7 @@ export class ProvisionController {
 
   private onStatus(status: DeviceStatus): void {
     if (this.session.connected) this.view.setDeviceState(`蓝牙已连接 · ${wifiDescription(status.wifi)}`);
-    if (status.result === RESULT.SAVED && this.phase === "submitting") this.saved = true;
-    if (status.result === RESULT.UNAUTHORIZED && this.phase !== "checking") {
+    if (status.result === RESULT.UNAUTHORIZED) {
       this.authorized = false;
       this.view.clearWifiInputs();
       if (this.phase === "wifi" || this.phase === "done") {
@@ -60,15 +56,15 @@ export class ProvisionController {
   }
 
   private onDisconnected(): void {
-    this.view.clearWifiInputs();
-    if (this.phase === "checking") {
-      this.view.setDeviceState("设备重启中，等待蓝牙重连");
+    this.view.setDeviceState("蓝牙已断开");
+    if (this.phase === "done") {
       return;
     }
+    this.view.clearWifiInputs();
     this.operation?.abort();
     this.authorized = false;
     this.setPhase("disconnected");
-    this.view.showStatus(disconnectMessage(this.saved, this.confirmed), this.confirmed ? "success" : this.saved ? "progress" : "error");
+    this.view.showStatus(disconnectMessage(), "error");
   }
 
   private async fillCurrentWifiCredentials(signal: AbortSignal): Promise<string> {
@@ -109,8 +105,6 @@ export class ProvisionController {
       this.view.clearWifiInputs();
       await this.session.selectDevice(controller.signal);
       this.view.setDeviceName(this.session.displayName);
-      this.saved = false;
-      this.confirmed = false;
       const status = await this.session.connectGatt(controller.signal);
       this.setPhase("auth");
       const stored = savedOtaPassword();
@@ -155,7 +149,7 @@ export class ProvisionController {
     this.authorized = false;
     this.view.clearWifiInputs();
     this.setPhase("disconnected");
-    this.view.showStatus(disconnectMessage(this.saved, this.confirmed), this.saved && !this.confirmed ? "progress" : "");
+    this.view.showStatus(disconnectMessage());
   }
 
   private startAnother(): void {
@@ -164,8 +158,6 @@ export class ProvisionController {
     this.operation = undefined;
     this.session.disconnect();
     this.authorized = false;
-    this.saved = false;
-    this.confirmed = false;
     this.view.clearWifiInputs();
     this.view.clearOtaPassword();
     this.view.setDeviceName("尚未选择设备");
@@ -202,8 +194,6 @@ export class ProvisionController {
     const controller = new AbortController();
     this.operation = controller;
     let frames: Frame[] = [];
-    this.saved = false;
-    this.confirmed = false;
     this.setPhase("submitting");
     try {
       frames = createProvisionFrames(this.view.ssid, this.view.wifiPassword);
@@ -217,17 +207,9 @@ export class ProvisionController {
         controller.signal.throwIfAborted();
         this.view.showStatus(`正在发送 Wi‑Fi 信息（${index + 1}/${frames.length}）…`, "progress");
         await this.session.sendFrame(frame, index + 1, frames.length, controller.signal);
-        if (frame.expected === RESULT.SAVED) this.saved = true;
       }
       controller.signal.throwIfAborted();
       this.authorized = false;
-      this.setPhase("checking");
-      this.view.showStatus("信息已保存，等待设备重启并连接 Wi‑Fi…", "progress");
-      await checkAfterRestart(this.session, controller.signal, (wifi) => {
-        this.view.showStatus(`设备已重启，${wifiDescription(wifi)}…`, "progress");
-      });
-      controller.signal.throwIfAborted();
-      this.confirmed = true;
       this.setPhase("done");
       this.view.clearStatus();
       this.view.focusAnother();
