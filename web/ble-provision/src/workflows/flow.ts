@@ -9,7 +9,21 @@ export function showAuthForm(phase: Phase): boolean {
 }
 
 export function showWifiForm(phase: Phase): boolean {
-  return phase === "wifi" || phase === "submitting" || phase === "checking" || phase === "done";
+  return phase === "wifi" || phase === "submitting" || phase === "checking";
+}
+
+export function showConnectPanel(phase: Phase): boolean {
+  return phase === "disconnected" || phase === "connecting";
+}
+
+export function showSuccessPanel(phase: Phase): boolean {
+  return phase === "done";
+}
+
+export function currentStep(phase: Phase): number {
+  if (showConnectPanel(phase)) return 1;
+  if (showAuthForm(phase)) return 2;
+  return 3;
 }
 
 export function disconnectMessage(saved: boolean, confirmed: boolean): string {

@@ -33,6 +33,7 @@ export class ProvisionController {
       disconnect: () => this.disconnect(),
       auth: () => { void this.submitAuth(); },
       provision: () => { void this.submitProvision(); },
+      another: () => this.startAnother(),
     });
     this.view.render(this.phase);
     if (!("bluetooth" in navigator)) {
@@ -65,8 +66,9 @@ export class ProvisionController {
       return;
     }
     this.operation?.abort();
+    this.authorized = false;
     this.setPhase("disconnected");
-    this.view.showStatus(disconnectMessage(this.saved, this.confirmed), this.saved && !this.confirmed ? "progress" : "error");
+    this.view.showStatus(disconnectMessage(this.saved, this.confirmed), this.confirmed ? "success" : this.saved ? "progress" : "error");
   }
 
   private async fillCurrentWifiCredentials(signal: AbortSignal): Promise<string> {
@@ -150,9 +152,26 @@ export class ProvisionController {
     this.operation?.abort();
     this.operation = undefined;
     this.session.disconnect();
+    this.authorized = false;
     this.view.clearWifiInputs();
     this.setPhase("disconnected");
     this.view.showStatus(disconnectMessage(this.saved, this.confirmed), this.saved && !this.confirmed ? "progress" : "");
+  }
+
+  private startAnother(): void {
+    if (this.phase !== "done") return;
+    this.operation?.abort();
+    this.operation = undefined;
+    this.session.disconnect();
+    this.authorized = false;
+    this.saved = false;
+    this.confirmed = false;
+    this.view.clearWifiInputs();
+    this.view.clearOtaPassword();
+    this.view.setDeviceName("尚未选择设备");
+    this.view.clearStatus();
+    this.setPhase("disconnected");
+    this.view.focusConnect();
   }
 
   private async submitAuth(): Promise<void> {
@@ -210,7 +229,8 @@ export class ProvisionController {
       controller.signal.throwIfAborted();
       this.confirmed = true;
       this.setPhase("done");
-      this.view.showStatus("配网成功，设备已连接 Wi‑Fi。", "success");
+      this.view.clearStatus();
+      this.view.focusAnother();
     } catch (error) {
       if (controller.signal.aborted) return;
       if (error instanceof DeviceResultError && error.result === RESULT.UNAUTHORIZED) this.authorized = false;
