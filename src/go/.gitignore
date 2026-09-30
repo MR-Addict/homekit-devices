@@ -1,0 +1,6 @@
+bin/
+db/
+temperature-db/
+config.yaml
+/wol.config.yaml
+/temperature.config.yaml

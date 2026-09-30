@@ -2,7 +2,7 @@
 
 ESP32 台灯控制，接入 Apple HomeKit。可在「家庭」App 中开关灯，也可通过实体按键本地翻转状态。
 
-固件会广播 `HS-Lamp-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../../README.md#ble-配网页面)。
+固件会广播 `HS-Lamp-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../README.md#ble-配网页面)。
 
 ## 引脚
 

@@ -1,0 +1,11 @@
+homekit:
+  name: "PVE主机"
+  storage_path: "/etc/homekit-wol/db"
+  listen_address: ":32042"
+  interfaces: ["br-lan"]
+wol:
+  broadcast_ip: "192.168.8.255"
+  port: 9
+devices:
+  - name: "PVE主机"
+    mac: "E0:51:D8:11:3D:CE"

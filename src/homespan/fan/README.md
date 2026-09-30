@@ -2,7 +2,7 @@
 
 ESP32 风扇开关，接入 Apple HomeKit。可在「家庭」App 中开关，也可用实体按键切换。
 
-固件会广播 `HS-Fan-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../../README.md#ble-配网页面)。
+固件会广播 `HS-Fan-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../README.md#ble-配网页面)。
 
 ## 引脚与接线
 

@@ -4,7 +4,7 @@
 
 目标电脑需在 BIOS 与网卡设置中开启 Wake-on-LAN，并与 ESP32 处于同一局域网。
 
-固件会广播 `HS-WOL-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../../README.md#ble-配网页面)。
+固件会广播 `HS-WOL-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../README.md#ble-配网页面)。
 
 ## 添加要唤醒的电脑
 
