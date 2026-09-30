@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f9f6">
+    <title>HomeKit 设备 BLE 配网</title>
+    <link rel="icon" type="image/svg+xml" href="./logo.svg">
+    <script type="module" crossorigin src="./assets/index-BVcP0vM4.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CWgpojPg.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <img class="header-logo" src="./logo.svg" alt="" width="48" height="48">
+        <div class="header-copy">
+          <h1>设置设备 Wi‑Fi</h1>
+          <p>连接附近设备并填写网络信息</p>
+        </div>
+      </header>
+
+      <div class="setup-surface">
+        <div id="device-summary" class="device-summary" hidden>
+          <div class="device-details">
+            <strong id="device-name">尚未选择设备</strong>
+            <span id="device-state">蓝牙未连接</span>
+          </div>
+          <button id="disconnect-button" class="text-button" type="button">断开蓝牙</button>
+        </div>
+
+        <section id="connect-section" class="panel" aria-labelledby="connect-heading">
+          <h2 id="connect-heading">连接设备</h2>
+          <p class="panel-description">请靠近设备，并开启电脑蓝牙。</p>
+          <button id="connect-button" class="button primary" type="button">搜索附近设备</button>
+        </section>
+
+        <section id="auth-section" class="panel" aria-labelledby="auth-heading" hidden>
+          <h2 id="auth-heading">验证设备密码</h2>
+          <p class="panel-description">首次连接时，输入设备的 OTA 密码。</p>
+          <form id="auth-form" autocomplete="off">
+            <label for="ota-password">OTA 密码</label>
+            <input id="ota-password" type="password" required autocomplete="off" placeholder="输入 OTA 密码">
+            <button id="auth-button" class="button primary" type="submit">验证密码</button>
+          </form>
+        </section>
+
+        <section id="wifi-section" class="panel" aria-labelledby="wifi-heading" hidden>
+          <h2 id="wifi-heading">设置 Wi‑Fi</h2>
+          <p class="panel-description">填写要让设备连接的 2.4 GHz 网络。</p>
+          <form id="provision-form" autocomplete="off">
+            <label for="ssid">网络名称</label>
+            <input id="ssid" type="text" required autocomplete="off" spellcheck="false" placeholder="Wi‑Fi 名称">
+            <label for="wifi-password">网络密码</label>
+            <div class="password-field">
+              <input id="wifi-password" type="password" autocomplete="off" spellcheck="false" placeholder="开放网络可留空">
+              <button id="toggle-wifi-password" class="password-toggle" type="button" aria-label="显示网络密码" aria-pressed="false">显示</button>
+            </div>
+            <button id="submit-button" class="button primary" type="submit">保存并连接</button>
+          </form>
+        </section>
+
+        <section id="success-section" class="panel success-panel" aria-labelledby="success-heading" hidden>
+          <div class="success-icon" aria-hidden="true">✓</div>
+          <h2 id="success-heading">设置完成</h2>
+          <p><strong id="success-device-name">设备</strong> 的 Wi‑Fi 信息已保存，设备将重启并尝试连接。</p>
+          <button id="another-button" class="button primary" type="button">配置另一台设备</button>
+        </section>
+
+        <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+      </div>
+
+      <footer>OTA 密码验证成功后保存在此浏览器。Wi‑Fi 信息不会保存在浏览器或上传。</footer>
+    </main>
+  </body>
+</html>
