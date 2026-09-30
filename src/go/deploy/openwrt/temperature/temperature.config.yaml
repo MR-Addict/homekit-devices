@@ -1,10 +1,10 @@
 homekit:
-  name: "路由器温度"
+  name: "Router Temperature"
   storage_path: "/etc/homekit-temperature/db"
   listen_address: ":32043"
   interfaces: ["br-lan"]
 temperature:
-  name: "路由器温度"
+  name: "Router Temperature"
   # GL-BE3600: tsens_tz_sensor11 (SoC thermal sensor).
   path: "/sys/class/thermal/thermal_zone0/temp"
   interval: "30s"

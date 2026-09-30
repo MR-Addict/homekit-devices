@@ -20,7 +20,7 @@ openwrt/
 | WOL | PVE主机，MAC `E0:51:D8:11:3D:CE`，广播 `192.168.8.255:9` | TCP 32042 | `/etc/homekit-wol/db` |
 | 温度 | `/sys/class/thermal/thermal_zone0/temp`，每 30 秒 | TCP 32043 | `/etc/homekit-temperature/db` |
 
-两个 HomeKit 服务在 `br-lan`（192.168.8.1/24）发布，分别配对，默认 PIN `001-02-003`。WOL 目标 PVE主机位于 OpenWrt 下的 `192.168.8.0/24`，广播经 `br-lan` 发出。温度路径对应 `tsens_tz_sensor11`；固件还暴露 sensor12–15，未标明传感器在芯片上的具体位置，不能断言这是某个 CPU 核心温度。读数按千分之一摄氏度转换。
+WOL 桥接发布名称为 `Wake on LAN`，配对后可在家庭 App 中改为“网络唤醒”；内部开关仍叫“PVE主机”，可通过 `devices` 列表添加更多设备。两个 HomeKit 服务在 `br-lan`（192.168.8.1/24）发布，分别配对，默认 PIN `001-02-003`。WOL 目标 PVE主机位于 OpenWrt 下的 `192.168.8.0/24`，广播经 `br-lan` 发出。温度设备发布名称使用 `Router Temperature`，避免中文 HTTP Host 的兼容问题；配对后可以在家庭 App 中改为“路由器温度”。温度路径对应 `tsens_tz_sensor11`；固件还暴露 sensor12–15，未标明传感器在芯片上的具体位置，不能断言这是某个 CPU 核心温度。读数按千分之一摄氏度转换。
 
 服务面向 OpenWrt 下的 LAN 设备。Apple Home 所在设备需要能访问 `br-lan` 的 mDNS UDP 5353 和两个 TCP 端口。
 
@@ -56,7 +56,7 @@ chmod 600 /etc/homekit-wol/config.yaml /etc/homekit-temperature/config.yaml
 logread -e homekit
 ```
 
-在 Apple Home 分别添加“PVE主机”桥接和“路由器温度”传感器。两个配置目录和配对数据位于持久 overlay，不使用重启后消失的 `/tmp`。
+在 Apple Home 分别添加“Wake on LAN”桥接和“Router Temperature”传感器。两个配置目录和配对数据位于持久 overlay，不使用重启后消失的 `/tmp`。
 
 ## 管理与升级
 

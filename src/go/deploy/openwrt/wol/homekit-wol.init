@@ -18,7 +18,5 @@ start_service() {
     procd_close_instance
 }
 
-reload_service() {
-    stop
-    start
-}
+# rc.common reload re-submits the instance; procd watches CONFIG and
+# replaces the process after it has stopped when the file changes.

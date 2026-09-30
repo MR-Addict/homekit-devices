@@ -1,5 +1,5 @@
 homekit:
-  name: "PVE主机"
+  name: "Wake on LAN"
   storage_path: "/etc/homekit-wol/db"
   listen_address: ":32042"
   interfaces: ["br-lan"]
