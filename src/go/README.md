@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `homekit-wol` | 多设备 WOL；可选 PVE 状态检测与正常关机 | [WOL / PVE](docs/wol.md) | [WOL 部署](deploy/openwrt/wol/README.md) |
 | `homekit-temperature` | 读取 Linux thermal 温度传感器 | [温度传感器](docs/temperature.md) | [温度部署](deploy/openwrt/temperature/README.md) |
-| `homekit-chromecast` | Chromecast 电源开关与 Remote v2 遥控 CLI | [Chromecast](docs/chromecast.md) | [Chromecast 部署](deploy/openwrt/chromecast/README.md) |
+| `homekit-chromecast` | Chromecast HomeKit 电视遥控器与 Remote v2 CLI | [Chromecast](docs/chromecast.md) | [Chromecast 部署](deploy/openwrt/chromecast/README.md) |
 
 共享字段与路径规则见 [HomeKit 配置](docs/homekit.md)，安装和维护流程见 [OpenWrt 部署](deploy/openwrt/README.md)。
 

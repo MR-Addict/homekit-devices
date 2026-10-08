@@ -15,3 +15,14 @@ control:
   interval: "5s"
   timeout: "5s"
   transition_timeout: "15s"
+
+# 可选应用输入源；默认不启用，按实际安装应用取消注释。
+# apps:
+#   - id: 1
+#     name: "YouTube"
+#     launch: "https://www.youtube.com"
+#     package: "com.google.android.youtube.tv"
+#   - id: 2
+#     name: "哔哩哔哩"
+#     launch: "yst://com.xiaodianshi.tv.yst"
+#     package: "com.xiaodianshi.tv.yst"

@@ -1,0 +1,38 @@
+--- a/pkg/v2/remote/protocol.go
++++ b/pkg/v2/remote/protocol.go
+@@ -69,6 +69,7 @@
+ 	volumeInfo      *VolumeInfo
+ 	imeCounter      int32
+ 	imeFieldCounter int32
++	imeReady bool
+ 	voiceBegin      chan int32
+ 
+ 	remoteStarted chan struct{}
+@@ -270,6 +271,7 @@
+ 		p.mu.Lock()
+ 		p.imeCounter = msg.GetRemoteImeBatchEdit().GetImeCounter()
+ 		p.imeFieldCounter = msg.GetRemoteImeBatchEdit().GetFieldCounter()
++		p.imeReady = true
+ 		p.mu.Unlock()
+ 
+ 	case msg.GetRemoteSetVolumeLevel() != nil:
+--- /dev/null
++++ b/pkg/v2/remote/homekit_support.go
+@@ -0,0 +1,17 @@
++package remote
++
++// Features reports the negotiated features of the current connection.
++func (r *AndroidTVRemote) Features() (Feature, bool) {
++ p := r.protocol()
++ if p == nil || p.closed() { return 0, false }
++ return p.features(), true
++}
++
++// IMEReady reports whether this connection has received input-field counters.
++func (r *AndroidTVRemote) IMEReady() bool {
++ p := r.protocol()
++ if p == nil || p.closed() { return false }
++ p.mu.Lock()
++ defer p.mu.Unlock()
++ return p.imeReady && p.activeFeatures & FeatureIME != 0
++}
