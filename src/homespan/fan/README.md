@@ -2,9 +2,9 @@
 
 ESP32 风扇开关，接入 Apple HomeKit。可在「家庭」App 中开关，也可用实体按键切换。
 
-固件会广播 `HS-Fan-xxxx` BLE 配网服务。操作方法见[通用 BLE 配网指南](../README.md#ble-配网页面)。
+固件会广播 `HS-Fan-xxxx` BLE 配网服务。操作方法见 [BLE 配网页面](../../web/ble-provision/README.md)。
 
-## 引脚与接线
+## 接线与配置
 
 | 功能 | GPIO | 接线与电平 |
 | --- | --- | --- |
@@ -13,7 +13,6 @@ ESP32 风扇开关，接入 Apple HomeKit。可在「家庭」App 中开关，�
 
 修改 `fan.ino` 中 `new HSFan(4, 3)` 的输出和按键引脚参数。
 
-## 文件
+## 烧录与使用
 
-- `fan.ino`：入口，初始化 HomeSpan 与风扇配件
-- `fan.h`：`HSFan` 服务（`Service::Fan`），处理开关状态、NVS 恢复与按键事件
+按 [HomeSpan 共用指南](../README.md) 安装依赖、选择分区、烧录及配对。

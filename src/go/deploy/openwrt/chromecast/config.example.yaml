@@ -1,0 +1,17 @@
+homekit:
+  name: "Chromecast"
+  # 配对前可设置自己的非保留 PIN；程序默认 001-02-003。
+  storage_path: "/etc/homekit-chromecast/db"
+  listen_address: ":32044"
+  interfaces: ["br-lan"]
+  serial_number: "chromecast-living-room"
+chromecast:
+  host: "192.0.2.20"
+  cert_path: "/etc/homekit-chromecast/credentials/cert.pem"
+  key_path: "/etc/homekit-chromecast/credentials/key.pem"
+  # 每次 POWER 切换前检查最新的 Remote v2 电源状态。
+  power_mode: "toggle"
+control:
+  interval: "5s"
+  timeout: "5s"
+  transition_timeout: "15s"

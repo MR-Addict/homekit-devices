@@ -5,6 +5,6 @@ homekit:
   interfaces: ["br-lan"]
 temperature:
   name: "Router Temperature"
-  # GL-BE3600: tsens_tz_sensor11 (SoC thermal sensor).
+  # 在目标设备运行 homekit-temperature -list-sensors，按 type 确认实际路径。
   path: "/sys/class/thermal/thermal_zone0/temp"
   interval: "30s"
