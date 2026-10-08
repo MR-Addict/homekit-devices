@@ -264,3 +264,33 @@ func writeTempConfig(t *testing.T, body string) string {
 
 	return path
 }
+
+func TestPowerOptionsValidation(t *testing.T) {
+	base := Config{Devices: []DeviceConfig{{Name: "PC", MAC: "02:00:00:00:00:01"}}}
+	base.applyDefaults()
+	for _, tc := range []struct {
+		name    string
+		options *PowerOptions
+		valid   bool
+	}{
+		{"legacy", nil, true},
+		{"pve", &PowerOptions{Type: "pve", Host: "192.0.2.10", Token: "homekit@pve!power=secret"}, true},
+		{"unknown", &PowerOptions{Type: "ssh", Host: "192.0.2.10", Token: "homekit@pve!power=secret"}, false},
+		{"missing host", &PowerOptions{Type: "pve", Token: "homekit@pve!power=secret"}, false},
+		{"missing token", &PowerOptions{Type: "pve", Host: "192.0.2.10"}, false},
+		{"header injection", &PowerOptions{Type: "pve", Host: "192.0.2.10", Token: "homekit@pve!power=secret\n"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base.Devices[0].Options = tc.options
+			err := base.Validate()
+			if (err == nil) != tc.valid {
+				t.Fatalf("validation=%v", err)
+			}
+		})
+	}
+}
+func TestMissingConfigDoesNotFallback(t *testing.T) {
+	if _, err := Load(filepath.Join(t.TempDir(), "config.yaml")); err == nil {
+		t.Fatal("missing config accepted")
+	}
+}

@@ -1,0 +1,131 @@
+# Based on github.com/brutella/hap v0.0.35 (Apache-2.0; upstream LICENSE is retained).
+# Observed-state command writes and bounded, cancelable TCP bind retry.
+
+diff --git a/characteristic/c.go b/characteristic/c.go
+--- a/characteristic/c.go
++++ b/characteristic/c.go
+@@ -104,6 +104,11 @@
+ 	// in the response body (as defined in HAP-R2 6.7.1.4 HAP Status Codes).
+ 	SetValueRequestFunc func(value interface{}, request *http.Request) (response interface{}, code int)
+ 
++	// RemoteWriteFunc handles command writes without changing the cached value.
++	// Unlike SetValueRequestFunc, it also receives same-value writes. Local
++	// SetValue calls still update the cache and publish observed-state events.
++	RemoteWriteFunc func(value interface{}, request *http.Request) (response interface{}, code int)
++
+ 	// A list of update value functions.
+ 	// There are called when the value of the characteristic is updated.
+ 	valUpdateFuncs []ValueUpdateFunc
+@@ -162,6 +167,13 @@
+ 	// reference old value
+ 	oldVal := c.Val
+ 	c.m.Unlock()
++
++	if req != nil && c.RemoteWriteFunc != nil {
++		if !c.validVal(newVal) {
++			return nil, -70410
++		}
++		return c.RemoteWriteFunc(newVal, req)
++	}
+ 
+ 	// ignore the same newVal
+ 	if oldVal == newVal && !c.updateOnSameValue {
+diff --git a/server.go b/server.go
+--- a/server.go
++++ b/server.go
+@@ -202,7 +202,7 @@
+ 
+ func (s *Server) listenAndServe(ctx context.Context) error {
+ 	// Listen with a tcp socket on a given addr/port.
+-	tcpLn, err := net.Listen("tcp", s.Addr)
++	tcpLn, err := listenTCP(ctx, s.Addr)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/listen_tcp.go b/listen_tcp.go
+--- /dev/null
++++ b/listen_tcp.go
+@@ -0,0 +1,35 @@
++package hap
++
++import (
++	"context"
++	"errors"
++	"net"
++	"syscall"
++	"time"
++)
++
++// OpenWrt can reject a rebind while accepted HomeKit connections remain in
++// TIME_WAIT. Wait through that bounded interval instead of exhausting procd's
++// crash-loop budget. Do not share a listening port with another process.
++func listenTCP(ctx context.Context, addr string) (net.Listener, error) {
++	deadline := time.Now().Add(65 * time.Second)
++	for {
++		if err := ctx.Err(); err != nil {
++			return nil, err
++		}
++		listener, err := net.Listen("tcp", addr)
++		if err == nil {
++			return listener, nil
++		}
++		if !errors.Is(err, syscall.EADDRINUSE) || !time.Now().Before(deadline) {
++			return nil, err
++		}
++		timer := time.NewTimer(time.Second)
++		select {
++		case <-ctx.Done():
++			timer.Stop()
++			return nil, ctx.Err()
++		case <-timer.C:
++		}
++	}
++}
+diff --git a/listen_tcp_test.go b/listen_tcp_test.go
+--- /dev/null
++++ b/listen_tcp_test.go
+@@ -0,0 +1,44 @@
++package hap
++
++import (
++	"context"
++	"errors"
++	"net"
++	"testing"
++	"time"
++)
++
++func TestListenTCPBusyPortCanBeCanceled(t *testing.T) {
++	busy, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer busy.Close()
++	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
++	defer cancel()
++	listener, err := listenTCP(ctx, busy.Addr().String())
++	if listener != nil {
++		listener.Close()
++		t.Fatal("shared busy port")
++	}
++	if !errors.Is(err, context.DeadlineExceeded) {
++		t.Fatalf("unexpected cancellation: %v", err)
++	}
++}
++func TestListenTCPRetriesReleasedPort(t *testing.T) {
++	busy, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	addr := busy.Addr().String()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	released := make(chan struct{})
++	go func() { time.Sleep(20 * time.Millisecond); busy.Close(); close(released) }()
++	listener, err := listenTCP(ctx, addr)
++	<-released
++	if err != nil {
++		t.Fatal(err)
++	}
++	listener.Close()
++}

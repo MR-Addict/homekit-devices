@@ -1,6 +1,7 @@
 bin/
 db/
 temperature-db/
-config.yaml
-/wol.config.yaml
-/temperature.config.yaml
+
+# Generated from the pinned upstream module and patches/hap-v0.0.35.patch.
+/third_party/hap/
+/third_party/.hap-prepare.*/

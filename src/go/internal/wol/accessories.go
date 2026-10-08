@@ -8,6 +8,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/brutella/hap/accessory"
 )
@@ -15,6 +16,13 @@ import (
 const bridgeAccessoryID uint64 = 1
 
 func BuildAccessories(cfg Config) ([]*accessory.A, error) {
+	accessories, _, err := BuildRuntime(cfg)
+	return accessories, err
+}
+
+// BuildRuntime returns the accessories and a worker owned by hapserver.Run.
+func BuildRuntime(cfg Config) ([]*accessory.A, func(context.Context), error) {
+	var controllers []*PowerController
 	bridge := accessory.NewBridge(accessory.Info{
 		Name:         cfg.HomeKit.Name,
 		SerialNumber: bridgeSerialNumber(cfg),
@@ -28,27 +36,45 @@ func BuildAccessories(cfg Config) ([]*accessory.A, error) {
 	accessories = append(accessories, bridge.A)
 
 	for _, device := range cfg.Devices {
-		wakeSwitch := NewWakeSwitch(accessory.Info{
+		info := accessory.Info{
 			Name:         device.Name,
 			SerialNumber: serialNumberForMAC(device.MAC),
 			Manufacturer: cfg.HomeKit.Manufacturer,
 			Model:        cfg.HomeKit.Model,
 			Firmware:     cfg.HomeKit.Firmware,
-		}, DefaultResetDelay, func(ctx context.Context) error {
+		}
+		wake := func(ctx context.Context) error {
 			log.Printf("sending Wake-on-LAN packet to %s (%s)", device.Name, device.MAC)
 			return Send(ctx, device.MAC, device.BroadcastIP, device.Port)
-		})
+		}
+		var wakeSwitch *accessory.Switch
+		if device.Options == nil {
+			wakeSwitch = NewWakeSwitch(info, DefaultResetDelay, wake)
+		} else {
+			client := NewPVEClient(*device.Options)
+			controller := newPowerController(info, client, wake, func(ctx context.Context) (bool, error) { return pingHost(ctx, device.Options.Host) })
+			controllers = append(controllers, controller)
+			wakeSwitch = controller.Accessory
+		}
 
 		accessoryID, err := accessoryIDForMAC(device.MAC)
 		if err != nil {
-			return nil, fmt.Errorf("derive accessory id for %q: %w", device.Name, err)
+			return nil, nil, fmt.Errorf("derive accessory id for %q: %w", device.Name, err)
 		}
 		wakeSwitch.Id = accessoryID
 
 		accessories = append(accessories, wakeSwitch.A)
 	}
 
-	return accessories, nil
+	worker := func(ctx context.Context) {
+		var wg sync.WaitGroup
+		for _, controller := range controllers {
+			wg.Add(1)
+			go func() { defer wg.Done(); controller.Poll(ctx) }()
+		}
+		wg.Wait()
+	}
+	return accessories, worker, nil
 }
 
 func bridgeSerialNumber(cfg Config) string {

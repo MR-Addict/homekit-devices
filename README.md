@@ -5,7 +5,7 @@
 | 实现 | 功能 | 运行环境 | 文档 |
 | --- | --- | --- | --- |
 | HomeSpan | 风扇、台灯、网络唤醒 | ESP32 / Arduino | [HomeSpan](src/homespan/README.md) |
-| Go | 多设备网络唤醒、路由器温度 | Linux、OpenWrt；WOL 也支持其他 Go 平台 | [Go](src/go/README.md) |
+| Go | 多设备网络唤醒、PVE 电源控制、路由器温度 | Linux、OpenWrt；WOL 也支持其他 Go 平台 | [Go](src/go/README.md) |
 | Web | HomeSpan 设备 BLE 配网 | 支持 Web Bluetooth 的桌面浏览器 | [配网使用说明](src/homespan/README.md#ble-配网页面) |
 
 ```text
@@ -19,7 +19,7 @@ src/
 │   ├── cmd/              homekit-wol、homekit-temperature
 │   ├── internal/         hapserver、wol、temperature
 │   ├── scripts/          构建脚本
-│   └── deploy/openwrt/   按应用组织的生产配置与 procd 服务
+│   └── deploy/openwrt/   按应用组织的配置示例与 procd 服务
 └── web/
     └── ble-provision/    BLE 配网页面
 ```

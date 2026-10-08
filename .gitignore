@@ -1,2 +1,8 @@
 node_modules
 dist
+
+# Private runtime configuration (examples remain tracked).
+config.yaml
+config.yml
+*.config.yaml
+*.config.yml

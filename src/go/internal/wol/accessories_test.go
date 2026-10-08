@@ -101,3 +101,22 @@ func TestBuildServerAccessoriesCreatesBridgeAndSwitches(t *testing.T) {
 		t.Fatalf("expected second child name NAS, got %q", accessories[2].Name())
 	}
 }
+
+func TestPowerModePreservesAccessoryIdentity(t *testing.T) {
+	cfg := Config{Devices: []DeviceConfig{{Name: "PC", MAC: "02:00:00:00:00:01"}}}
+	cfg.applyDefaults()
+	legacy, err := BuildAccessories(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Devices[0].Options = &PowerOptions{Type: "pve", Host: "192.0.2.10", Token: "homekit@pve!power=secret"}
+	power, _, err := BuildRuntime(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range legacy {
+		if legacy[i].Id != power[i].Id || legacy[i].Info.SerialNumber.Value() != power[i].Info.SerialNumber.Value() {
+			t.Fatal("mode changed pairing identity")
+		}
+	}
+}

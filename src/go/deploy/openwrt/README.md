@@ -1,40 +1,61 @@
-# BE3600 OpenWrt 部署
+# OpenWrt 部署
 
-目标为 `ssh be3600`：GL.iNet GL-BE3600 / IPQ5332，OpenWrt 23.05-SNAPSHOT，Linux 5.4.213，aarch64。这里保存实际生产配置。
+首个目标为 GL.iNet GL-BE3600 / aarch64，路由器通过 `ssh be3600` 访问。仓库只保存配置示例；实际配置由用户填写，Git 忽略 `config.yaml`。
 
 ```text
 openwrt/
 ├── README.md
 ├── temperature/
 │   ├── homekit-temperature.init
-│   └── temperature.config.yaml
+│   └── config.example.yaml
 └── wol/
     ├── homekit-wol.init
-    └── wol.config.yaml
+    └── config.example.yaml
 ```
 
-## 当前配置
+## 准备配置
 
-| 应用 | 配置 | 端口 | 配对数据 |
-| --- | --- | --- | --- |
-| WOL | PVE主机，MAC `E0:51:D8:11:3D:CE`，广播 `192.168.8.255:9` | TCP 32042 | `/etc/homekit-wol/db` |
-| 温度 | `/sys/class/thermal/thermal_zone0/temp`，每 30 秒 | TCP 32043 | `/etc/homekit-temperature/db` |
+从 `src/go/` 执行以下复制命令（仅首次，已有实际配置时不要覆盖）：
 
-WOL 桥接发布名称为 `Wake on LAN`，配对后可在家庭 App 中改为“网络唤醒”；内部开关仍叫“PVE主机”，可通过 `devices` 列表添加更多设备。两个 HomeKit 服务在 `br-lan`（192.168.8.1/24）发布，分别配对，默认 PIN `001-02-003`。WOL 目标 PVE主机位于 OpenWrt 下的 `192.168.8.0/24`，广播经 `br-lan` 发出。温度设备发布名称使用 `Router Temperature`，避免中文 HTTP Host 的兼容问题；配对后可以在家庭 App 中改为“路由器温度”。温度路径对应 `tsens_tz_sensor11`；固件还暴露 sensor12–15，未标明传感器在芯片上的具体位置，不能断言这是某个 CPU 核心温度。读数按千分之一摄氏度转换。
+```sh
+cp -n deploy/openwrt/wol/config.example.yaml deploy/openwrt/wol/config.yaml
+cp -n deploy/openwrt/temperature/config.example.yaml deploy/openwrt/temperature/config.yaml
+chmod 600 deploy/openwrt/wol/config.yaml deploy/openwrt/temperature/config.yaml
+```
 
-服务面向 OpenWrt 下的 LAN 设备。Apple Home 所在设备需要能访问 `br-lan` 的 mDNS UDP 5353 和两个 TCP 端口。
+填写目标 MAC、子网广播、HomeKit 发布接口和监听地址。两个服务使用不同端口、独立配对目录。温度路径通过 `/usr/bin/homekit-temperature -list-sensors` 确认；BE3600 示例为 `thermal_zone0`（`tsens_tz_sensor11`），不代表某个 CPU 核心。Apple Home 需能访问所选 LAN 接口的 mDNS UDP 5353 和两个 TCP 端口。
+
+WOL 配置中的 `options` 可选，不配置时仅发送唤醒包。PVE 模式配置 `type: pve`、宿主机固定 IPv4 `host`、完整 `token`。节点名自动发现；无需证书文件，HTTPS 不核验服务器身份。详见 [Go 服务说明](../../README.md#pve-电源控制)。
+
+## PVE Token
+
+使用 SSH 登录 PVE，先确定实际节点名，再创建专用用户与角色：
+
+```sh
+pveum user add homekit@pve --comment 'HomeKit host power control'
+pveum role add HomeKitPower --privs 'Sys.Audit Sys.PowerMgmt'
+pveum acl modify /nodes/<节点名> --users homekit@pve --roles HomeKitPower --propagate 0
+pveum user token add homekit@pve power --privsep 1 --output-format json
+pveum acl modify /nodes/<节点名> --tokens 'homekit@pve!power' --roles HomeKitPower --propagate 0
+```
+
+将创建时仅返回一次的密钥填入被忽略的配置：`token: "homekit@pve!power=<密钥>"`。创建命令仅用于首次配置；已有用户、角色或 Token 时检查并复用，不重复执行。不要把密钥复制到文档或日志。
 
 ## 构建与首次安装
 
-从 `src/go/` 执行：
+从 `src/go/` 执行，构建脚本会自动下载并应用 HAP 小补丁，完整源码不进入仓库。先确认实际配置存在并已填写；仅上传明确列出的文件，两个配置使用不同临时名称：
 
 ```sh
+set -eu
 ./scripts/build-openwrt.sh
+test -f deploy/openwrt/wol/config.yaml && test -f deploy/openwrt/temperature/config.yaml
 ssh be3600 'uname -m; ip -4 addr show'
-scp -O bin/*-linux-arm64 deploy/openwrt/wol/* deploy/openwrt/temperature/* be3600:/tmp/
+scp -O bin/homekit-wol-linux-arm64 bin/homekit-temperature-linux-arm64 deploy/openwrt/wol/homekit-wol.init deploy/openwrt/temperature/homekit-temperature.init be3600:/tmp/
+scp -O deploy/openwrt/wol/config.yaml be3600:/tmp/homekit-wol.config.yaml
+scp -O deploy/openwrt/temperature/config.yaml be3600:/tmp/homekit-temperature.config.yaml
 ```
 
-确认 `uname -m` 为 `aarch64`。在路由器执行（首次安装；已有部署使用后面的升级流程）：
+确认架构为 `aarch64`，再在路由器执行（首次安装；已有部署参照升级流程）：
 
 ```sh
 mkdir -p /etc/homekit-wol /etc/homekit-temperature
@@ -43,12 +64,11 @@ cp /tmp/homekit-wol-linux-arm64 /usr/bin/homekit-wol
 cp /tmp/homekit-temperature-linux-arm64 /usr/bin/homekit-temperature
 cp /tmp/homekit-wol.init /etc/init.d/homekit-wol
 cp /tmp/homekit-temperature.init /etc/init.d/homekit-temperature
-cp /tmp/wol.config.yaml /etc/homekit-wol/config.yaml
-cp /tmp/temperature.config.yaml /etc/homekit-temperature/config.yaml
-chmod 755 /usr/bin/homekit-wol /usr/bin/homekit-temperature
-chmod 755 /etc/init.d/homekit-wol /etc/init.d/homekit-temperature
+cp /tmp/homekit-wol.config.yaml /etc/homekit-wol/config.yaml
+cp /tmp/homekit-temperature.config.yaml /etc/homekit-temperature/config.yaml
+chmod 755 /usr/bin/homekit-wol /usr/bin/homekit-temperature /etc/init.d/homekit-wol /etc/init.d/homekit-temperature
 chmod 600 /etc/homekit-wol/config.yaml /etc/homekit-temperature/config.yaml
-/usr/bin/homekit-temperature -list-sensors
+rm /tmp/homekit-wol.config.yaml /tmp/homekit-temperature.config.yaml
 /etc/init.d/homekit-wol enable
 /etc/init.d/homekit-temperature enable
 /etc/init.d/homekit-wol start
@@ -56,18 +76,31 @@ chmod 600 /etc/homekit-wol/config.yaml /etc/homekit-temperature/config.yaml
 logread -e homekit
 ```
 
-在 Apple Home 分别添加“Wake on LAN”桥接和“Router Temperature”传感器。两个配置目录和配对数据位于持久 overlay，不使用重启后消失的 `/tmp`。
+在 Apple Home 分别添加两个服务；配置与 `db/` 存于持久 overlay，不使用 `/tmp`。实际配置不存在时程序会报错，不会使用示例。
 
-## 管理与升级
+## 升级、回滚与管理
 
-两个服务均支持 `start`、`stop`、`restart`、`reload`、`enable`、`disable`。修改配置后执行对应服务的 reload。procd 转发系统日志，异常退出 5 秒后重试，一小时内连续五次快速退出后停止重试；修复配置后手动 restart。
+升级前备份 `/usr/bin/homekit-wol`、`/etc/init.d/homekit-wol`、`/etc/homekit-wol/`，备份目录权限 `0700`，复制配置保留 `0600`。温度服务升级时同样处理。
 
-更新二进制时重新构建、上传到 `/tmp/`，然后分别 stop、替换 `/usr/bin/` 中的对应二进制、`chmod 755`、start。保持配置与 `db/` 不变。更新配置时仅替换对应 `/etc/homekit-*/config.yaml` 再 reload。
+仅更新二进制时显式上传对应二进制到 `/tmp/`，然后 stop、替换 `/usr/bin/` 文件、`chmod 755`、start，保留配置与 `db/`。更新配置时使用对应的独立临时名称，替换 `/etc/homekit-*/config.yaml`、`chmod 600`、删除临时配置，再 reload。失败时 stop、恢复备份文件、start。不要覆盖另一个服务的配置或删除配对目录。
 
-卸载时 stop、disable，再移除 `/usr/bin/` 二进制和 `/etc/init.d/` 脚本；默认保留配置及配对目录。固件 sysupgrade 前备份两个 `/etc/homekit-*/` 目录，并核对固件保留规则，手动安装的二进制可能需要重装。
+两个服务支持 start、stop、restart、reload、enable、disable。procd 转发日志，异常退出 5 秒后重试，一小时内五次快速退出后停止重试。修复配置后手动 restart。路由器可能因旧连接的 TCP TIME_WAIT 暂时无法重新绑定端口；程序对此等待重试最多 65 秒，退出信号可取消等待。进程运行仍需配合检查监听端口，不能单凭 procd 状态判定就绪。
 
-## 验证边界
+卸载时 stop、disable，移除二进制与 init 脚本，默认保留配置及配对目录。sysupgrade 前备份 `/etc/homekit-*/` 并检查固件保留规则；二进制可能需要重装。
 
-部署后检查 procd 状态、监听端口、日志、温度原始值及服务重启。Apple Home 配对和实际 PVE 唤醒需要在家庭 App 操作验证；不通过重启路由器来影响其他网络服务。
+## 实机验收
 
-已通过 `ssh be3600` 安装两个服务并启用开机自启，确认进程运行、TCP 端口监听和传感器发现。配对与实际唤醒仍待 Apple Home 验证。
+检查 procd 状态、监听端口、日志、温度值，以及 PVE API 节点发现和状态读取。确认 BIOS/网卡 WOL、来宾正常关机与自启动，再执行关机→连续离线→WOL→API 恢复闭环，核对来宾恢复。
+
+当前实验环境宿主机 LAN 地址为 `192.168.8.187`：使用 `ssh -o HostName=192.168.8.187 pve`，沿用已有密钥。原 `ssh pve` 的另一个地址可能依赖宿主机内的 OpenWrt 虚拟机，关机验收使用宿主机 LAN 和物理路由器，避免恢复路径随来宾停机中断。不修改个人 SSH 配置，也不重启物理路由器。
+
+用户在家庭 App 验证开关机和状态通知；另外检查 PVE 网页手动关机后的同步。部署成功不等同于 Apple Home 验收完成。唤醒失败明确报告结果，由现场恢复主机。
+
+## 实机记录（2026-10-08）
+
+- 专用权限分离 Token 可自动发现节点 `pve` 并读取状态，正常关机接口实测可用。
+- 修正版通过关机→离线→WOL→API 恢复闭环：关机约 55 秒、唤醒约 45 秒；`openwrt`、`ubuntu` 均恢复运行，其他原先停止的来宾保持停止。
+- `/etc/homekit-wol/db/` 内所有文件与部署前备份逐一比对一致，包含配对文件、密钥、UUID 和配置版本；温度服务继续运行。
+- 已建立客户端连接时，重启后的新进程约 67 秒恢复监听，PID 保持不变，未触发 procd respawn；可取消、限时的监听重试避免 TIME_WAIT 导致崩溃循环。
+- 本地及路由器两份实际配置权限均为 `0600`，Token 未出现在任何待提交文件中。
+- 备份位于路由器 `/root/homekit-backup-20261008-pve-power/`。Apple Home 实际点击及客户端通知呈现仍需用户手动验收；自动测试覆盖 HAP 特征读写与检测状态通知。

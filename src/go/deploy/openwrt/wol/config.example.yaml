@@ -1,0 +1,16 @@
+homekit:
+  name: "Wake on LAN"
+  storage_path: "/etc/homekit-wol/db"
+  listen_address: ":32042"
+  interfaces: ["br-lan"]
+wol:
+  broadcast_ip: "192.0.2.255"
+  port: 9
+devices:
+  - name: "服务器"
+    mac: "02:00:00:00:00:01"
+    # 可选：启用 PVE 状态检测与正常关机；不配置则仅发送 WOL。
+    # options:
+    #   type: pve
+    #   host: "192.0.2.10"
+    #   token: "<用户>@pve!<令牌名>=<密钥>"

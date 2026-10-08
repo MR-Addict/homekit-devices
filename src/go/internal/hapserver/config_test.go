@@ -6,6 +6,7 @@ import (
 	"net"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestNormalizeDefaultsAndValidation(t *testing.T) {
@@ -28,9 +29,9 @@ func TestRunRejectsMissingAccessories(t *testing.T) {
 	}
 }
 
-// An occupied port fails before mDNS setup, allowing a deterministic check that
-// startup errors propagate and cancel the background worker.
-func TestRunBindFailureStopsWorker(t *testing.T) {
+// An occupied port waits before mDNS setup. Cancellation must stop both the
+// listener retry and background worker without treating shutdown as an error.
+func TestRunCanceledBindWaitStopsWorker(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -39,9 +40,11 @@ func TestRunBindFailureStopsWorker(t *testing.T) {
 	cfg := Config{Name: "Test", Pin: "00102003", StoragePath: t.TempDir(), ListenAddress: listener.Addr().String()}
 	a := accessory.NewSwitch(accessory.Info{Name: "Test"})
 	stopped := make(chan struct{})
-	err = Run(context.Background(), cfg, []*accessory.A{a.A}, func(ctx context.Context) { <-ctx.Done(); close(stopped) })
-	if err == nil {
-		t.Fatal("bind error ignored")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	err = Run(ctx, cfg, []*accessory.A{a.A}, func(ctx context.Context) { <-ctx.Done(); close(stopped) })
+	if err != nil {
+		t.Fatalf("canceled startup: %v", err)
 	}
 	select {
 	case <-stopped:

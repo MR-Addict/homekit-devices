@@ -37,10 +37,17 @@ type WOLConfig struct {
 }
 
 type DeviceConfig struct {
-	Name        string `yaml:"name"`
-	MAC         string `yaml:"mac"`
-	BroadcastIP string `yaml:"broadcast_ip,omitempty"`
-	Port        int    `yaml:"port,omitempty"`
+	Options     *PowerOptions `yaml:"options,omitempty"`
+	Name        string        `yaml:"name"`
+	MAC         string        `yaml:"mac"`
+	BroadcastIP string        `yaml:"broadcast_ip,omitempty"`
+	Port        int           `yaml:"port,omitempty"`
+}
+
+type PowerOptions struct {
+	Type  string `yaml:"type"`
+	Host  string `yaml:"host"`
+	Token string `yaml:"token"`
 }
 
 func Load(path string) (Config, error) {
@@ -71,6 +78,11 @@ func (cfg *Config) normalize() {
 	cfg.WOL.BroadcastIP = strings.TrimSpace(cfg.WOL.BroadcastIP)
 
 	for index := range cfg.Devices {
+		if o := cfg.Devices[index].Options; o != nil {
+			o.Type = strings.TrimSpace(o.Type)
+			o.Host = strings.TrimSpace(o.Host)
+			o.Token = strings.TrimSpace(o.Token)
+		}
 		cfg.Devices[index].Name = strings.TrimSpace(cfg.Devices[index].Name)
 		cfg.Devices[index].MAC = strings.TrimSpace(cfg.Devices[index].MAC)
 		cfg.Devices[index].BroadcastIP = strings.TrimSpace(cfg.Devices[index].BroadcastIP)
@@ -124,6 +136,18 @@ func (cfg Config) Validate() error {
 	seenMACs := make(map[string]int, len(cfg.Devices))
 	for index, device := range cfg.Devices {
 		path := fmt.Sprintf("devices[%d]", index)
+		if o := device.Options; o != nil {
+			if o.Type != "pve" {
+				problems = append(problems, path+".options.type must be pve")
+			}
+			if ip := net.ParseIP(o.Host); ip == nil || ip.To4() == nil {
+				problems = append(problems, path+".options.host must be a fixed IPv4 address")
+			}
+			id, secret, ok := strings.Cut(o.Token, "=")
+			if !ok || !strings.Contains(id, "@") || !strings.Contains(id, "!") || secret == "" || strings.ContainsAny(o.Token, "\r\n") {
+				problems = append(problems, path+".options.token must be user@realm!tokenid=secret")
+			}
+		}
 
 		if device.Name == "" {
 			problems = append(problems, path+".name is required")

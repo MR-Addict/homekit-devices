@@ -21,12 +21,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	accessories, err := wol.BuildAccessories(cfg)
+	accessories, worker, err := wol.BuildRuntime(cfg)
 	if err != nil {
 		return err
 	}
 	for _, d := range cfg.Devices {
 		log.Printf("configured wake target %q (%s) via %s:%d", d.Name, d.MAC, d.BroadcastIP, d.Port)
 	}
-	return hapserver.Run(context.Background(), cfg.HomeKit, accessories, nil)
+	return hapserver.Run(context.Background(), cfg.HomeKit, accessories, worker)
 }
