@@ -60,13 +60,13 @@ func (c *Client) NewRemote() *remote.AndroidTVRemote {
 func (c *Client) WithSession(ctx context.Context, fn func(*remote.AndroidTVRemote) error) error {
 	if _, bounded := ctx.Deadline(); !bounded {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.TimeoutOrDefault()+time.Second)
+		ctx, cancel = context.WithTimeout(ctx, c.TimeoutOrDefault())
 		defer cancel()
 	}
 	if _, err := os.Stat(c.Config.KeyPath); err != nil {
 		return fmt.Errorf("Chromecast credentials missing; run homekit-chromecast pair: %w", err)
 	}
-	unlock, err := sessionLock(ctx, c.Config.KeyPath)
+	unlock, err := trySessionLock(c.Config.KeyPath)
 	if err != nil {
 		return err
 	}
@@ -91,9 +91,6 @@ func (c *Client) WithSession(ctx context.Context, fn func(*remote.AndroidTVRemot
 		r.Disconnect()
 	})
 	defer stop()
-	if err = Sleep(ctx, time.Second); err != nil {
-		return err
-	}
 	err = fn(r)
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -103,6 +100,9 @@ func (c *Client) WithSession(ctx context.Context, fn func(*remote.AndroidTVRemot
 func Snapshot(r *remote.AndroidTVRemote) Status {
 	var s Status
 	s.Features, s.Available = r.Features()
+	if !s.Available {
+		return s
+	}
 	if on, ok := r.IsOn(); ok {
 		s.On = &on
 	}
@@ -115,6 +115,9 @@ func Snapshot(r *remote.AndroidTVRemote) Status {
 		// Remote service sends partial volume messages without a usable range.
 		// Expose these as unknown instead of inventing a 0/0 volume setting.
 		s.Volume = nil
+	}
+	if _, available := r.Features(); !available {
+		return Status{}
 	}
 	return s
 }
@@ -144,10 +147,10 @@ func (c *Client) TimeoutOrDefault() time.Duration {
 func Require(r *remote.AndroidTVRemote, f remote.Feature) error {
 	features, known := r.Features()
 	if !known {
-		return errors.New("Chromecast disconnected")
+		return ErrUnavailable
 	}
 	if features&f != f {
-		return fmt.Errorf("device does not support requested remote feature (%d)", f)
+		return fmt.Errorf("%w (%d)", ErrUnsupported, f)
 	}
 	return nil
 }
@@ -161,40 +164,69 @@ func (c *Client) SetPower(ctx context.Context, on bool) error {
 		defer cancel()
 	}
 	return c.WithSession(ctx, func(r *remote.AndroidTVRemote) error {
-		if err := Require(r, remote.FeaturePower|remote.FeatureKey); err != nil {
-			return err
-		}
-		current, ok := r.IsOn()
-		if !ok {
-			return errors.New("Chromecast power unknown; refusing POWER toggle")
-		}
-		if current == on {
-			return nil
-		}
-		key := "POWER"
-		if c.Config.PowerMode == "discrete" {
-			key = "SLEEP"
-			if on {
-				key = "WAKEUP"
-			}
-		}
-		if err := r.SendKeyCommand(key); err != nil {
-			return err
-		}
-		for {
-			if err := Sleep(ctx, 100*time.Millisecond); err != nil {
-				return err
-			}
-			value, known := r.IsOn()
-			if !known {
-				return errors.New("Chromecast disconnected during power transition")
-			}
-			if value == on {
-				return nil
-			}
-		}
+		return setPower(ctx, r, c.Config.PowerMode, on)
 	})
 }
+
+func setPower(ctx context.Context, r *remote.AndroidTVRemote, mode string, on bool) error {
+	if err := Require(r, remote.FeaturePower|remote.FeatureKey); err != nil {
+		return err
+	}
+	current, ok := r.IsOn()
+	if !ok {
+		return errors.New("Chromecast power unknown; refusing POWER toggle")
+	}
+	if current == on {
+		return nil
+	}
+	key := "POWER"
+	if mode == "discrete" {
+		key = "SLEEP"
+		if on {
+			key = "WAKEUP"
+		}
+	}
+	if err := r.SendKeyCommand(key); err != nil {
+		return err
+	}
+	return waitState(ctx, r, func() bool { value, known := r.IsOn(); return known && value == on })
+}
+
+// waitState waits for observations, never a fixed settling delay.
+func waitState(ctx context.Context, r *remote.AndroidTVRemote, ready func() bool) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, available := r.Features(); !available {
+			return ErrUnavailable
+		}
+		if ready() {
+			return nil
+		}
+		if err := Sleep(ctx, 10*time.Millisecond); err != nil {
+			return err
+		}
+	}
+}
+
+func setMute(ctx context.Context, r *remote.AndroidTVRemote, muted bool) error {
+	if err := Require(r, remote.FeatureVolume|remote.FeatureKey); err != nil {
+		return err
+	}
+	var volume *remote.VolumeInfo
+	if err := waitState(ctx, r, func() bool { volume = Snapshot(r).Volume; return volume != nil }); err != nil {
+		return fmt.Errorf("Chromecast mute state unknown; refusing toggle: %w", err)
+	}
+	if volume.Muted == muted {
+		return nil
+	}
+	if err := Key(ctx, r, "VOLUME_MUTE", 0); err != nil {
+		return err
+	}
+	return waitState(ctx, r, func() bool { volume := Snapshot(r).Volume; return volume != nil && volume.Muted == muted })
+}
+
 func (c *Client) Pair(ctx context.Context, input io.Reader, output io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(c.Config.KeyPath), 0700); err != nil {
 		return err
@@ -202,7 +234,7 @@ func (c *Client) Pair(ctx context.Context, input io.Reader, output io.Writer) er
 	if err := os.MkdirAll(filepath.Dir(c.Config.CertPath), 0700); err != nil {
 		return err
 	}
-	unlock, err := sessionLock(ctx, c.Config.KeyPath)
+	unlock, err := trySessionLock(c.Config.KeyPath)
 	if err != nil {
 		return err
 	}
@@ -351,17 +383,5 @@ func (c *Client) LaunchApp(ctx context.Context, app string) error {
 	return c.WithSession(ctx, func(r *remote.AndroidTVRemote) error { return Launch(r, app) })
 }
 func (c *Client) SetMute(ctx context.Context, muted bool) error {
-	return c.WithSession(ctx, func(r *remote.AndroidTVRemote) error {
-		if err := Require(r, remote.FeatureVolume|remote.FeatureKey); err != nil {
-			return err
-		}
-		volume := Snapshot(r).Volume
-		if volume == nil {
-			return errors.New("Chromecast mute state unknown; refusing toggle")
-		}
-		if volume.Muted == muted {
-			return nil
-		}
-		return Key(ctx, r, "VOLUME_MUTE", 0)
-	})
+	return c.WithSession(ctx, func(r *remote.AndroidTVRemote) error { return setMute(ctx, r, muted) })
 }

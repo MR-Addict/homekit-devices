@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strconv"
@@ -20,6 +21,9 @@ import (
 )
 
 func main() {
+	if os.Getenv("HOMEKIT_CHROMECAST_DEBUG") == "1" {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	}
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -62,7 +66,12 @@ func run(args []string) error {
 		if len(args) != 1 {
 			return errors.New("serve takes no arguments")
 		}
-		controller := chromecast.NewController(cfg)
+		session, err := chromecast.StartSession(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		defer session.Close()
+		controller := chromecast.NewControllerWithBackend(cfg, session)
 		return hapserver.Run(ctx, cfg.HomeKit, []*accessory.A{controller.Accessory.A}, controller.Poll)
 	}
 	return cast(ctx, cfg, args)
@@ -85,14 +94,14 @@ func cast(ctx context.Context, cfg chromecast.AppConfig, args []string) error {
 		if len(args) != 1 {
 			return errors.New("status takes no arguments")
 		}
-		s, err := client.Status(ctx)
+		s, err := chromecast.RunRequest(ctx, cfg, chromecast.Request{Version: 1, Operation: "status"})
 		return errors.Join(err, chromecast.WriteJSON(os.Stdout, s))
 	case "watch":
 		if len(args) != 1 {
 			return errors.New("watch takes no arguments")
 		}
 		for {
-			s, _ := client.Status(ctx)
+			s, _ := chromecast.RunRequest(ctx, cfg, chromecast.Request{Version: 1, Operation: "status"})
 			if err := chromecast.WriteJSON(os.Stdout, s); err != nil {
 				return err
 			}
@@ -109,13 +118,14 @@ func cast(ctx context.Context, cfg chromecast.AppConfig, args []string) error {
 		}
 		op, cancel := context.WithTimeout(ctx, chromecast.Duration(cfg.Control.TransitionTimeout))
 		defer cancel()
-		return client.SetPower(op, args[0] == "on")
+		_, err := chromecast.RunRequest(op, cfg, chromecast.Request{Version: 1, Operation: "power", On: args[0] == "on"})
+		return err
 	case "key", "text", "launch", "volume", "mute", "voice":
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
 	// Each command has an overall deadline, including its session and write.
-	timeout := chromecast.Duration(cfg.Control.Timeout) + time.Second
+	timeout := chromecast.Duration(cfg.Control.Timeout)
 	var hold time.Duration
 	var name string
 	var input io.Reader
@@ -192,39 +202,27 @@ func cast(ctx context.Context, cfg chromecast.AppConfig, args []string) error {
 	}
 	op, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	return client.WithSession(op, func(r *remote.AndroidTVRemote) error {
-		switch args[0] {
-		case "key":
-			return chromecast.Key(op, r, name, hold)
-		case "text":
-			return chromecast.Text(op, r, args[1])
-		case "launch":
-			return chromecast.Launch(r, args[1])
-		case "mute":
-			if err := chromecast.Require(r, remote.FeatureVolume); err != nil {
-				return err
-			}
-			return chromecast.Key(op, r, "VOLUME_MUTE", 0)
-		case "volume":
-			if err := chromecast.Require(r, remote.FeatureVolume); err != nil {
-				return err
-			}
-			key := "VOLUME_UP"
-			if args[1] == "down" {
-				key = "VOLUME_DOWN"
-			}
-			for i := 0; i < volumeSteps; i++ {
-				if err := chromecast.Key(op, r, key, 0); err != nil {
-					return err
-				}
-				if err := chromecast.Sleep(op, 50*time.Millisecond); err != nil {
-					return err
-				}
-			}
-			return nil
-		case "voice":
-			return chromecast.Voice(op, r, input)
+	q := chromecast.Request{Version: 1, Operation: args[0]}
+	switch args[0] {
+	case "key":
+		q.Key, q.Hold = name, hold
+	case "text":
+		q.Text = args[1]
+	case "launch":
+		q.App = args[1]
+	case "volume":
+		q.Key = "VOLUME_UP"
+		if args[1] == "down" {
+			q.Key = "VOLUME_DOWN"
 		}
-		return nil
-	})
+		q.Steps = volumeSteps
+	case "voice":
+		var err error
+		q.Audio, err = io.ReadAll(input)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := chromecast.RunRequest(op, cfg, q)
+	return err
 }

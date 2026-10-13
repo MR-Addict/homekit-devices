@@ -296,6 +296,9 @@ func TestHomeKitMuteUsesFreshVolumeAndNeverBlindlyToggles(t *testing.T) {
 					if m.GetRemoteKeyInject().GetKeyCode() != pb.RemoteKeyCode_KEYCODE_VOLUME_MUTE {
 						return errors.New("missing mute key")
 					}
+					if err := sendRemote(c, &pb.RemoteMessage{RemoteSetVolumeLevel: &pb.RemoteSetVolumeLevel{VolumeMax: 100, VolumeLevel: 20, VolumeMuted: tc.target}}); err != nil {
+						return err
+					}
 				}
 				return eofOnly(c, r)
 			})

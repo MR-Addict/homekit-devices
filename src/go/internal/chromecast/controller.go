@@ -31,8 +31,10 @@ type Controller struct {
 	fault          error
 	failedTarget   *bool
 	ctx            context.Context
+	cancel         context.CancelFunc
 	stopped        bool
 	commands       chan bool
+	workers        sync.WaitGroup
 	operations     chan struct{}
 	RemoteKey      *characteristic.RemoteKey
 	VolumeSelector *characteristic.VolumeSelector
@@ -42,7 +44,8 @@ func NewController(cfg AppConfig) *Controller {
 	return NewControllerWithBackend(cfg, &Client{Config: cfg.Chromecast, Timeout: Duration(cfg.Control.Timeout)})
 }
 func NewControllerWithBackend(cfg AppConfig, b Backend) *Controller {
-	c := &Controller{backend: b, cfg: cfg, ctx: context.Background(), commands: make(chan bool, 1), operations: make(chan struct{}, 1)}
+	initial, cancel := context.WithCancel(context.Background())
+	c := &Controller{backend: b, cfg: cfg, ctx: initial, cancel: cancel, commands: make(chan bool, 1), operations: make(chan struct{}, 1)}
 	c.Accessory = accessory.NewTelevision(accessory.Info{Name: cfg.HomeKit.Name, SerialNumber: cfg.HomeKit.SerialNumber, Manufacturer: cfg.HomeKit.Manufacturer, Model: cfg.HomeKit.Model, Firmware: cfg.HomeKit.Firmware})
 	c.Accessory.Television.Active.RemoteWriteFunc = func(v interface{}, _ *http.Request) (interface{}, int) {
 		value, ok := v.(int)
@@ -68,6 +71,11 @@ func NewControllerWithBackend(cfg AppConfig, b Backend) *Controller {
 	return c
 }
 func (c *Controller) healthyLocked() bool {
+	if session, managed := c.backend.(*Session); managed {
+		if _, err := session.Status(c.ctx); err != nil {
+			return false
+		}
+	}
 	return c.status.Available && c.status.On != nil && time.Since(c.observed) <= Duration(c.cfg.Control.Interval)+2*Duration(c.cfg.Control.Timeout)
 }
 func (c *Controller) acquire(ctx context.Context) error {
@@ -83,6 +91,10 @@ func (c *Controller) acquire(ctx context.Context) error {
 	}
 }
 func (c *Controller) Sample(ctx context.Context) {
+	if _, managed := c.backend.(*Session); managed {
+		c.sample(ctx)
+		return
+	}
 	if err := c.acquire(ctx); err != nil {
 		return
 	}
@@ -140,11 +152,31 @@ func (c *Controller) Request(on bool) error {
 		}
 		return errors.New("opposite power operation already in progress")
 	}
-	if c.healthyLocked() && c.fault == nil && *c.status.On == on {
+	_, managed := c.backend.(*Session)
+	if !managed && c.healthyLocked() && c.fault == nil && *c.status.On == on {
 		return nil
 	}
 	c.pending = new(bool)
 	*c.pending = on
+	if session, managed := c.backend.(*Session); managed {
+		parent := c.ctx
+		op, cancel := context.WithTimeout(parent, Duration(c.cfg.Control.TransitionTimeout))
+		result, err := session.enqueue(op, Request{Version: 1, Operation: "power", On: on})
+		if err != nil {
+			cancel()
+			c.pending = nil
+			return err
+		}
+		c.workers.Add(1)
+		go func() {
+			defer c.workers.Done()
+			defer cancel()
+			err := result.wait(op)
+			c.sample(parent)
+			c.finishPower(on, err)
+		}()
+		return nil
+	}
 	c.commands <- on
 	return nil
 }
@@ -157,6 +189,9 @@ func (c *Controller) command(ctx context.Context, on bool) {
 		<-c.operations
 	}
 	cancel()
+	c.finishPower(on, err)
+}
+func (c *Controller) finishPower(on bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.pending = nil
@@ -177,7 +212,18 @@ func (c *Controller) Poll(ctx context.Context) {
 	c.mu.Lock()
 	c.ctx = ctx
 	c.mu.Unlock()
-	defer func() { c.mu.Lock(); c.stopped = true; c.pending = nil; c.mu.Unlock() }()
+	defer func() {
+		c.cancel()
+		c.mu.Lock()
+		c.stopped = true
+		c.pending = nil
+		c.mu.Unlock()
+		c.workers.Wait()
+	}()
+	var updates <-chan struct{}
+	if session, managed := c.backend.(*Session); managed {
+		updates = session.Updates()
+	}
 	c.Sample(ctx)
 	ticker := time.NewTicker(Duration(c.cfg.Control.Interval))
 	defer ticker.Stop()
@@ -185,6 +231,8 @@ func (c *Controller) Poll(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-updates:
+			c.Sample(ctx)
 		case on := <-c.commands:
 			if ctx.Err() == nil {
 				c.command(ctx, on)
@@ -224,10 +272,12 @@ func (c *Controller) execute(timeout time.Duration, fn func(context.Context) err
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	if err := c.acquire(ctx); err != nil {
-		return nil, -70402
+	if _, managed := c.backend.(*Session); !managed {
+		if err := c.acquire(ctx); err != nil {
+			return nil, -70402
+		}
+		defer func() { <-c.operations }()
 	}
-	defer func() { <-c.operations }()
 	err := fn(ctx)
 	if ctx.Err() != nil {
 		err = ctx.Err()
@@ -247,7 +297,7 @@ func (c *Controller) configureTelevision() {
 	tv.SleepDiscoveryMode.SetValue(characteristic.SleepDiscoveryModeAlwaysDiscoverable)
 	c.RemoteKey = characteristic.NewRemoteKey()
 	tv.AddC(c.RemoteKey.C)
-	timeout := Duration(c.cfg.Control.Timeout) + time.Second
+	timeout := Duration(c.cfg.Control.Timeout)
 	c.RemoteKey.RemoteWriteFunc = func(v interface{}, _ *http.Request) (interface{}, int) {
 		n, ok := v.(int)
 		key, exists := remoteKeys[n]
@@ -325,6 +375,12 @@ func (c *Controller) configureTelevision() {
 		for _, app := range apps {
 			if app.ID != id {
 				continue
+			}
+			if session, managed := c.backend.(*Session); managed {
+				return c.execute(Duration(c.cfg.Control.TransitionTimeout)+timeout, func(ctx context.Context) error {
+					_, err := session.Do(ctx, Request{Version: 1, Operation: "input", App: app.Launch})
+					return err
+				})
 			}
 			return c.execute(Duration(c.cfg.Control.TransitionTimeout)+timeout, func(ctx context.Context) error {
 				power, cancel := context.WithTimeout(ctx, Duration(c.cfg.Control.TransitionTimeout))

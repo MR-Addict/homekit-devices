@@ -42,7 +42,7 @@ fi
 snapshot "$atvremote_generated" > "$atvremote_test_work/good"
 
 # Force a hunk to fail against the pinned source after invalidating its stamp.
-sed 's/imeFieldCounter int32/missingUpstreamField int32/' \
+sed 's/if p == nil {/if p == missingUpstreamProtocol {/' \
     "$atvremote_fixture/patches/atvremote.patch" > "$atvremote_test_work/broken.patch"
 mv "$atvremote_test_work/broken.patch" "$atvremote_fixture/patches/atvremote.patch"
 if "$atvremote_fixture/scripts/prepare-atvremote.sh" > "$atvremote_test_work/failure.log" 2>&1; then

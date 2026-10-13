@@ -1,38 +1,164 @@
 --- a/pkg/v2/remote/protocol.go
 +++ b/pkg/v2/remote/protocol.go
-@@ -69,6 +69,7 @@
- 	volumeInfo      *VolumeInfo
- 	imeCounter      int32
- 	imeFieldCounter int32
-+	imeReady bool
- 	voiceBegin      chan int32
- 
- 	remoteStarted chan struct{}
-@@ -270,6 +271,7 @@
- 		p.mu.Lock()
- 		p.imeCounter = msg.GetRemoteImeBatchEdit().GetImeCounter()
- 		p.imeFieldCounter = msg.GetRemoteImeBatchEdit().GetFieldCounter()
+@@ -71,0 +72 @@
++	imeReady        bool
+@@ -214 +214,0 @@
+-	p.resetIdleTimer()
+@@ -272,0 +273 @@
 +		p.imeReady = true
- 		p.mu.Unlock()
- 
- 	case msg.GetRemoteSetVolumeLevel() != nil:
 --- /dev/null
 +++ b/pkg/v2/remote/homekit_support.go
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,33 @@
 +package remote
 +
 +// Features reports the negotiated features of the current connection.
 +func (r *AndroidTVRemote) Features() (Feature, bool) {
-+ p := r.protocol()
-+ if p == nil || p.closed() { return 0, false }
-+ return p.features(), true
++	p := r.protocol()
++	if p == nil || p.closed() {
++		return 0, false
++	}
++	return p.features(), true
 +}
 +
 +// IMEReady reports whether this connection has received input-field counters.
 +func (r *AndroidTVRemote) IMEReady() bool {
-+ p := r.protocol()
-+ if p == nil || p.closed() { return false }
-+ p.mu.Lock()
-+ defer p.mu.Unlock()
-+ return p.imeReady && p.activeFeatures & FeatureIME != 0
++	p := r.protocol()
++	if p == nil || p.closed() {
++		return false
++	}
++	p.mu.Lock()
++	defer p.mu.Unlock()
++	return p.imeReady && p.activeFeatures&FeatureIME != 0
 +}
++
++// ConnectionDone reports loss of the current connection. Capture this channel
++// after Connect; it belongs to that connection, even after a later reconnect.
++func (r *AndroidTVRemote) ConnectionDone() <-chan struct{} {
++	p := r.protocol()
++	if p != nil {
++		return p.conLost
++	}
++	done := make(chan struct{})
++	close(done)
++	return done
++}
+--- /dev/null
++++ b/pkg/v2/remote/homekit_support_test.go
+@@ -0,0 +1,73 @@
++package remote
++
++import (
++	"io"
++	"log/slog"
++	"net"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	pb "github.com/jkiddo/atvremote/pkg/v2/proto"
++)
++
++type deadlineConn struct {
++	net.Conn
++	writes atomic.Int32
++}
++
++func (c *deadlineConn) SetWriteDeadline(t time.Time) error {
++	if !t.IsZero() {
++		c.writes.Add(1)
++		t = time.Now().Add(20 * time.Millisecond)
++	}
++	return c.Conn.SetWriteDeadline(t)
++}
++func TestWriteDeadlineBoundsBlockedFrame(t *testing.T) {
++	a, b := net.Pipe()
++	defer a.Close()
++	defer b.Close()
++	wrapped := &deadlineConn{Conn: a}
++	c := newProtobufConn(wrapped)
++	began := time.Now()
++	if err := c.sendMessage(&pb.RemoteMessage{RemotePingResponse: &pb.RemotePingResponse{}}); err == nil {
++		t.Fatal("blocked write succeeded")
++	}
++	if wrapped.writes.Load() != 1 || time.Since(began) > time.Second {
++		t.Fatal("write deadline missing")
++	}
++}
++func TestOutboundFramesDoNotResetInboundWatchdog(t *testing.T) {
++	a, b := net.Pipe()
++	defer a.Close()
++	defer b.Close()
++	p := newRemoteProtocol(newProtobufConn(a), slog.New(slog.NewTextHandler(io.Discard, nil)), false, false, func(bool) {}, func(string) {}, func(VolumeInfo) {})
++	defer p.close()
++	p.idleTimer.Reset(40 * time.Millisecond)
++	done := make(chan struct{})
++	go func() { defer close(done); newProtobufConn(b).readRaw() }()
++	if err := p.send(&pb.RemoteMessage{RemotePingResponse: &pb.RemotePingResponse{}}, false); err != nil {
++		t.Fatal(err)
++	}
++	<-done
++	select {
++	case <-p.conLost:
++	case <-time.After(500 * time.Millisecond):
++		t.Fatal("outbound traffic hid missing inbound traffic")
++	}
++	r := &AndroidTVRemote{proto: p}
++	if _, known := r.IsOn(); known {
++		t.Fatal("closed power treated as known")
++	}
++	if _, known := r.CurrentApp(); known {
++		t.Fatal("closed app treated as known")
++	}
++	if r.VolumeInfo() != nil || r.DeviceInfo() != nil {
++		t.Fatal("closed metadata retained")
++	}
++	select {
++	case <-r.ConnectionDone():
++	default:
++		t.Fatal("connection loss not exposed")
++	}
++}
+--- a/pkg/v2/remote/conn.go
++++ b/pkg/v2/remote/conn.go
+@@ -9,0 +10 @@
++	"time"
+@@ -66 +67,9 @@
+-	_, err = c.conn.Write(buf)
++	// Includes ping replies, so a blocked writer cannot strand the read loop.
++	if err = c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
++		return err
++	}
++	defer c.conn.SetWriteDeadline(time.Time{})
++	n, err := c.conn.Write(buf)
++	if err == nil && n != len(buf) {
++		err = io.ErrShortWrite
++	}
+--- a/pkg/v2/remote/remote.go
++++ b/pkg/v2/remote/remote.go
+@@ -112 +112 @@
+-	if p == nil {
++	if p == nil || p.closed() {
+@@ -122 +122 @@
+-	if p == nil {
++	if p == nil || p.closed() {
+@@ -132 +132 @@
+-	if p == nil {
++	if p == nil || p.closed() {
+@@ -142 +142 @@
+-	if p == nil {
++	if p == nil || p.closed() {
+@@ -153 +153 @@
+-	if p == nil {
++	if p == nil || p.closed() {
+@@ -306,2 +306,9 @@
+-		// The handshake failed: the device rejected our certificate.
+-		return &InvalidAuth{Message: "need to pair", Err: err}
++		// Timeouts and transport failures are retryable; only TLS rejection
++		// means the stored pairing identity is invalid.
++		if ctx.Err() != nil {
++			return &CannotConnect{Message: "connection canceled", Err: ctx.Err()}
++		}
++		if isTLSError(err) {
++			return &InvalidAuth{Message: "need to pair", Err: err}
++		}
++		return &CannotConnect{Message: "TLS connection failed", Err: err}
