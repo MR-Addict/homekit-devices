@@ -7,8 +7,9 @@
 | 风扇 | HomeKit 开关、实体按键、恢复上次状态 | [接线与配置](fan/README.md) |
 | 台灯 | HomeKit 开关、实体按键 | [接线与配置](lamp/README.md) |
 | 网络唤醒 | 向局域网电脑发送 Magic Packet | [目标设备配置](wol/README.md) |
+| 小米电视 | 红外电视遥控 | [使用说明](television/README.md) |
 
-每个设备子目录是独立 Arduino sketch，目录名与入口文件名一致，可分别编译烧录。三个设备共用 `common/` 中的 BLE 配网服务与 OTA 密码；页面使用及开发见 [BLE 配网页面](../web/ble-provision/README.md)。
+每个设备子目录是独立 Arduino sketch，目录名与入口文件名一致，可分别编译烧录。所有设备共用 `common/` 中的 BLE 配网服务与 OTA 密码；页面使用及开发见 [BLE 配网页面](../web/ble-provision/README.md)。
 
 ## 依赖库
 
@@ -16,7 +17,7 @@
 | --- | --- | --- |
 | [HomeSpan](https://github.com/HomeSpan/HomeSpan) | 2.0.0+ | HomeKit 接入（需要 Arduino-ESP32 v3.x） |
 | [WakeOnLan](https://github.com/a7md0/WakeOnLan) | 1.1.7 | 仅 `wol` 使用，发送唤醒包 |
-| [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) | 2.5.1 | 三种设备共用的 BLE 配网服务 |
+| [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) | 2.5.1 | 共用的 BLE 配网服务 |
 
 ## Flash 与分区方案
 
@@ -41,10 +42,10 @@ ESP32 芯片至少有 4MB flash，但程序实际可用空间由**分区方案**
 
 1. 烧录后按 [BLE 配网页面指南](../web/ble-provision/README.md) 设置 Wi-Fi；也可在串口监视器中按提示输入 Wi-Fi 名称与密码
 2. 在「家庭」App 中添加配件，扫描串口输出的配对二维码
-3. 默认配对码 **466-37-726**，配对 PIN **HSPN**，可在串口 CLI 中修改
+3. 默认配对码 **466-37-726**，与 Go / OpenWrt 配件一致
 
 参考：[HomeSpan QRCodes](https://github.com/HomeSpan/HomeSpan/blob/master/docs/QRCodes.md)
 
 ## OTA
 
-三个 sketch 均已启用 OTA，默认密码 `ota`。联网后可在 Arduino IDE 中选择网络端口更新；首次烧录及分区方案变更使用 USB。
+所有 sketch 均已启用 OTA，默认密码 `ota`。联网后可在 Arduino IDE 中选择网络端口更新；首次烧录及分区方案变更使用 USB。

@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultBridgeName   = "Wake Targets"
-	defaultPin          = "00102003"
+	defaultPin          = "46637726"
 	defaultStoragePath  = "./db"
 	defaultBroadcastIP  = "255.255.255.255"
 	defaultPort         = 9

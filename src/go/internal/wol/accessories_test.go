@@ -54,7 +54,7 @@ func TestBuildServerAccessoriesCreatesBridgeAndSwitches(t *testing.T) {
 	cfg := Config{
 		HomeKit: HomeKitConfig{
 			Name:         "Wake Targets",
-			Pin:          "00102003",
+			Pin:          "46637726",
 			StoragePath:  "./db",
 			Manufacturer: "homekit-wol",
 			Model:        "wake-switch",

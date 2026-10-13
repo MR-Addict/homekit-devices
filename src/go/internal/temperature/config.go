@@ -34,7 +34,7 @@ func Load(path string) (Config, error) {
 		return c, fmt.Errorf("decode config: %w", err)
 	}
 	c.HomeKit.Normalize()
-	c.HomeKit.ApplyDefaults(hapserver.Config{Name: "路由器温度", Pin: "00102003", StoragePath: "./temperature-db", Manufacturer: "homekit-devices", Model: "router-temperature", Firmware: "1.0.0"})
+	c.HomeKit.ApplyDefaults(hapserver.Config{Name: "路由器温度", Pin: "46637726", StoragePath: "./temperature-db", Manufacturer: "homekit-devices", Model: "router-temperature", Firmware: "1.0.0"})
 	c.Temperature.Name = strings.TrimSpace(c.Temperature.Name)
 	if c.Temperature.Name == "" {
 		c.Temperature.Name = "路由器温度"

@@ -48,7 +48,7 @@ func Load(path string) (AppConfig, error) {
 		return c, fmt.Errorf("config must contain exactly one YAML document")
 	}
 	c.HomeKit.Normalize()
-	c.HomeKit.ApplyDefaults(hapserver.Config{Name: "Chromecast", Pin: "00102003", StoragePath: "./chromecast-db", Manufacturer: "homekit-devices", Model: "chromecast-remote", Firmware: "1.0.0"})
+	c.HomeKit.ApplyDefaults(hapserver.Config{Name: "Chromecast", Pin: "46637726", StoragePath: "./chromecast-db", Manufacturer: "homekit-devices", Model: "chromecast-remote", Firmware: "1.0.0"})
 	if c.HomeKit.ListenAddress == "" {
 		c.HomeKit.ListenAddress = ":32044"
 	}

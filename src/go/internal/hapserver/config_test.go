@@ -10,20 +10,20 @@ import (
 )
 
 func TestNormalizeDefaultsAndValidation(t *testing.T) {
-	c := Config{Name: " Router ", Pin: "001-02-003", Interfaces: []string{" br-lan "}, ListenAddress: ":32043"}
+	c := Config{Name: " Router ", Pin: "466-37-726", Interfaces: []string{" br-lan "}, ListenAddress: ":32043"}
 	c.Normalize()
 	c.ApplyDefaults(Config{Name: "fallback", StoragePath: "./db", Manufacturer: "test", Model: "sensor", Firmware: "1"})
-	if c.Name != "Router" || c.Pin != "00102003" || c.Interfaces[0] != "br-lan" || len(c.Problems()) != 0 {
+	if c.Name != "Router" || c.Pin != "46637726" || c.Interfaces[0] != "br-lan" || len(c.Problems()) != 0 {
 		t.Fatalf("%+v %v", c, c.Problems())
 	}
-	for _, bad := range []Config{{Pin: "12345678", StoragePath: "db"}, {Pin: "00102003"}, {Pin: "00102003", StoragePath: "db", ListenAddress: ":0"}, {Pin: "00102003", StoragePath: "db", ListenAddress: "invalid"}, {Pin: "00102003", StoragePath: "db", Interfaces: []string{""}}} {
+	for _, bad := range []Config{{Pin: "12345678", StoragePath: "db"}, {Pin: "46637726"}, {Pin: "46637726", StoragePath: "db", ListenAddress: ":0"}, {Pin: "46637726", StoragePath: "db", ListenAddress: "invalid"}, {Pin: "46637726", StoragePath: "db", Interfaces: []string{""}}} {
 		if len(bad.Problems()) == 0 {
 			t.Fatalf("accepted %+v", bad)
 		}
 	}
 }
 func TestRunRejectsMissingAccessories(t *testing.T) {
-	cfg := Config{Pin: "00102003", StoragePath: filepath.Join(t.TempDir(), "db")}
+	cfg := Config{Pin: "46637726", StoragePath: filepath.Join(t.TempDir(), "db")}
 	if err := Run(context.Background(), cfg, nil, nil); err == nil {
 		t.Fatal("empty accessory list accepted")
 	}
@@ -37,7 +37,7 @@ func TestRunCanceledBindWaitStopsWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	cfg := Config{Name: "Test", Pin: "00102003", StoragePath: t.TempDir(), ListenAddress: listener.Addr().String()}
+	cfg := Config{Name: "Test", Pin: "46637726", StoragePath: t.TempDir(), ListenAddress: listener.Addr().String()}
 	a := accessory.NewSwitch(accessory.Info{Name: "Test"})
 	stopped := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)

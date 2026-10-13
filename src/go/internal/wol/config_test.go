@@ -10,7 +10,7 @@ import (
 func TestLoadAppliesDefaultsAndNormalizesValues(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 wol:
   broadcast_ip: "192.168.1.255"
 devices:
@@ -26,7 +26,7 @@ devices:
 		t.Fatalf("Load() returned error: %v", err)
 	}
 
-	if cfg.HomeKit.Pin != "00102003" {
+	if cfg.HomeKit.Pin != "46637726" {
 		t.Fatalf("expected normalized pin, got %q", cfg.HomeKit.Pin)
 	}
 	if cfg.HomeKit.Name != defaultBridgeName {
@@ -104,7 +104,7 @@ devices:
 func TestLoadRejectsInvalidMAC(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 devices:
   - name: "Gaming PC"
     mac: "not-a-mac"
@@ -122,7 +122,7 @@ devices:
 func TestLoadAllowsDeviceBroadcastOverride(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 wol:
   broadcast_ip: "255.255.255.255"
 devices:
@@ -144,7 +144,7 @@ devices:
 func TestLoadRejectsInvalidDeviceBroadcastOverride(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 wol:
   broadcast_ip: "255.255.255.255"
 devices:
@@ -165,7 +165,7 @@ devices:
 func TestLoadRejectsNonEthernetMAC(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 devices:
   - name: "Gaming PC"
     mac: "00:11:22:33:44:55:66:77"
@@ -183,7 +183,7 @@ devices:
 func TestLoadRejectsDuplicateDeviceNames(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 devices:
   - name: "Gaming PC"
     mac: "00:11:22:33:44:55"
@@ -203,7 +203,7 @@ devices:
 func TestLoadRejectsDuplicateDeviceMACs(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 devices:
   - name: "Gaming PC"
     mac: "00:11:22:33:44:55"
@@ -223,7 +223,7 @@ devices:
 func TestLoadRejectsEmptyDeviceList(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 devices: []
 `)
 
@@ -239,7 +239,7 @@ devices: []
 func TestLoadRejectsLegacyDeviceConfig(t *testing.T) {
 	path := writeTempConfig(t, `
 homekit:
-  pin: "001-02-003"
+  pin: "466-37-726"
 device:
   name: "Gaming PC"
   mac: "00:11:22:33:44:55"

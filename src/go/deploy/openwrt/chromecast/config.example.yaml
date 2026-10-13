@@ -1,6 +1,6 @@
 homekit:
   name: "Chromecast"
-  # 配对前可设置自己的非保留 PIN；程序默认 001-02-003。
+  # 配对前可设置自己的非保留 PIN；程序默认 466-37-726。
   storage_path: "/etc/homekit-chromecast/db"
   listen_address: ":32044"
   interfaces: ["br-lan"]
