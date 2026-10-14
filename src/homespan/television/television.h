@@ -24,6 +24,7 @@ private:
   SpanCharacteristic *active;
   SpanCharacteristic *remote;
   TVPowerState powerState;
+  int observedPower = -1;
   int pendingPower = -1;
   uint32_t powerDeadline = 0;
 
@@ -40,11 +41,16 @@ public:
     addLink(new HSTelevisionSpeaker());
   }
 
+  bool begin(const char *ip) {
+    return powerState.begin(ip);
+  }
+
   boolean update() override {
     if (active->updated()) {
       int power = powerState.state();
       int target = active->getNewVal();
       if (power < 0) return false;
+      observedPower = power;
       if (pendingPower >= 0) return target == pendingPower;
       if (power != target) {
         if (!TelevisionIR::send(TelevisionIR::power)) return false;
@@ -68,11 +74,14 @@ public:
 
   void loop() override {
     int power = powerState.state();
+    if (power >= 0) observedPower = power;
     if (pendingPower >= 0) {
       if (power == pendingPower || (int32_t)(millis() - powerDeadline) >= 0)
         pendingPower = -1;
-      else return;
     }
-    if (power >= 0 && active->getVal() != power) active->setVal(power);
+    // HomeSpan commits the requested Active value after update(); restore the
+    // last observation even if Wi-Fi drops before the next poll.
+    if (observedPower >= 0 && active->getVal() != observedPower)
+      active->setVal(observedPower);
   }
 };

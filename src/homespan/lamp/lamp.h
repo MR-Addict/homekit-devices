@@ -28,12 +28,14 @@ public:
     lampPinB = pinB;
     lampPinC = pinC;
 
-    new SpanButton(button, SpanButton::TRIGGER_ON_HIGH);
+    new SpanButton(button, 2000, 5, 0, SpanButton::TRIGGER_ON_HIGH);
     setLampState(power->getVal());
   }
 
   // 实体按键按下时翻转开关状态
   void button(int pin, int pressType) override {
+    if (pressType != SpanButton::SINGLE) return;
+
     bool state = !power->getVal();
     setLampState(state);
     power->setVal(state);

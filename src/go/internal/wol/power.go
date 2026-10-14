@@ -66,7 +66,7 @@ func (c *PowerController) Request(on bool) error {
 		}
 		return errors.New("power operation in progress")
 	}
-	if c.known && c.on == on {
+	if c.known && c.fault == nil && c.on == on {
 		return nil
 	}
 	if !on && (!c.known || c.fault != nil) {

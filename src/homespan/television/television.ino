@@ -15,7 +15,9 @@ void setup() {
   new Service::AccessoryInformation();
   new Characteristic::Identify();
 
-  new HSTelevision();
+  auto *tv = new HSTelevision();
+  if (!tv->begin("192.168.10.173"))
+    Serial.println("TV power state initialization failed");
 
   bleProvision.begin("HS-IRTV");
   bleProvision.autoPoll();

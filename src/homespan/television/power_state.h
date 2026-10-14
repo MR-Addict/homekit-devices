@@ -7,12 +7,21 @@
 class TVPowerState {
 private:
   esp_ping_handle_t ping = nullptr;
+  ip_addr_t targetAddr{};
+  bool configured = false;
   std::atomic<int> value{-1};
   std::atomic<unsigned> misses{0};
   uint32_t retryAt = 0;
 
 public:
+  bool begin(const char *ip) {
+    if (configured || !ip) return false;
+    configured = ipaddr_aton(ip, &targetAddr) != 0;
+    return configured;
+  }
+
   int state() {
+    if (!configured) return -1;
     if (WiFi.status() != WL_CONNECTED) {
       misses = 0;
       value = -1;
@@ -21,7 +30,7 @@ public:
     if (!ping && (int32_t)(millis() - retryAt) >= 0) {
       retryAt = millis() + 5000;
       esp_ping_config_t config = ESP_PING_DEFAULT_CONFIG();
-      ipaddr_aton("192.168.10.173", &config.target_addr);
+      config.target_addr = targetAddr;
       config.count = ESP_PING_COUNT_INFINITE;
       config.interval_ms = 2000;
       config.timeout_ms = 1000;

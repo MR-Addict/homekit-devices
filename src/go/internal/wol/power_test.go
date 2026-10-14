@@ -209,3 +209,35 @@ func TestWakeWaitsForAPIReadiness(t *testing.T) {
 		t.Fatal("API readiness did not complete wake")
 	}
 }
+
+func TestWakeWithFaultedOnObservationSendsPacket(t *testing.T) {
+	c, b, wakes, _, _ := fixturePower()
+	c.Sample(context.Background())
+	b.reachable, b.err = false, errors.New("offline")
+	c.Sample(context.Background())
+	if _, code := readPower(c); code == 0 {
+		t.Fatal("fault must make the old on observation unavailable")
+	}
+	if remoteWrite(c, true) != 0 || *wakes != 1 || c.pending == nil {
+		t.Fatal("wake accepted without sending a packet and tracking the operation")
+	}
+	if remoteWrite(c, true) != 0 || *wakes != 1 {
+		t.Fatal("duplicate pending wake resent the packet")
+	}
+}
+
+func TestShutdownWithFaultedOffObservationIsRejected(t *testing.T) {
+	c, b, _, _, probeErr := fixturePower()
+	b.reachable, b.err = false, errors.New("offline")
+	for i := 0; i < 3; i++ {
+		c.Sample(context.Background())
+	}
+	if on, code := readPower(c); on || code != 0 {
+		t.Fatal("expected a healthy off observation")
+	}
+	*probeErr = errors.New("probe failed")
+	c.Sample(context.Background())
+	if remoteWrite(c, false) == 0 || b.shutdowns != 0 || c.pending != nil {
+		t.Fatal("shutdown accepted using a faulted off observation")
+	}
+}
