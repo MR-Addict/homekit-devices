@@ -55,7 +55,7 @@ func (c *Client) NewRemote() *remote.AndroidTVRemote {
 	if port == 0 {
 		port = 6466
 	}
-	return remote.New("HomeKit Chromecast Controller", c.Config.CertPath, c.Config.KeyPath, c.Config.Host, remote.WithAPIPort(port), remote.WithIME(true), remote.WithVoice(true), remote.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))
+	return remote.New("Chromecast", c.Config.CertPath, c.Config.KeyPath, c.Config.Host, remote.WithAPIPort(port), remote.WithIME(true), remote.WithVoice(true), remote.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))
 }
 func (c *Client) WithSession(ctx context.Context, fn func(*remote.AndroidTVRemote) error) error {
 	if _, bounded := ctx.Deadline(); !bounded {

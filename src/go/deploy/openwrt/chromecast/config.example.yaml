@@ -26,3 +26,7 @@ control:
 #     name: "哔哩哔哩"
 #     launch: "yst://com.xiaodianshi.tv.yst"
 #     package: "com.xiaodianshi.tv.yst"
+#   - id: 3
+#     name: "Netflix"
+#     launch: "nflx://www.netflix.com"
+#     package: "com.netflix.ninja"
