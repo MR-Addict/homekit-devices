@@ -13,7 +13,7 @@ import (
 // Explicit opt-in hardware check. Normal test runs never contact live hosts.
 // Compile for OpenWrt with go test -c, then set HOMEKIT_POWER_CONFIG and
 // optionally HOMEKIT_POWER_ACTION=on|off to exercise the HAP command path.
-func TestLivePVE(t *testing.T) {
+func TestLivePower(t *testing.T) {
 	path := os.Getenv("HOMEKIT_POWER_CONFIG")
 	if path == "" {
 		t.Skip("set HOMEKIT_POWER_CONFIG to opt into hardware testing")
@@ -36,10 +36,12 @@ func TestLivePVE(t *testing.T) {
 		}
 	}
 	if d == nil {
-		t.Fatal("no PVE device configured")
+		t.Fatal("no power device configured")
 	}
-	b := NewPVEClient(*d.Options)
-	defer b.Close()
+	b := newPowerBackend(*d.Options)
+	if closer, ok := b.(interface{ Close() }); ok {
+		defer closer.Close()
+	}
 	c := newPowerController(accessory.Info{Name: d.Name}, b, func(ctx context.Context) error { return Send(ctx, d.MAC, d.BroadcastIP, d.Port) }, func(ctx context.Context) (bool, error) { return pingHost(ctx, d.Options.Host) })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute+10*time.Second)
 	defer cancel()
@@ -50,7 +52,7 @@ func TestLivePVE(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("state unavailable, HAP code=%d", code)
 		}
-		t.Logf("live observed state on=%v, node=%s", v, b.node)
+		t.Logf("live observed state on=%v, backend=%s", v, d.Options.Type)
 		return
 	}
 	desired := action == "on"

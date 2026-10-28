@@ -1,0 +1,4 @@
+# Generate once: openssl rand -hex 32. Use the same token on the bridge.
+token: "<random-token>"
+# Optional; defaults to :32045.
+# listen_address: ":32045"

@@ -1,12 +1,13 @@
 # Go HomeKit 服务
 
-一个 Go 模块提供三个独立程序，分别运行、配对和保存数据。
+一个 Go 模块提供四个独立程序：三个 HomeKit 服务独立配对和保存数据，Agent 运行于受控主机。
 
 | 程序 | 功能 | 使用说明 | OpenWrt 部署 |
 | --- | --- | --- | --- |
-| `homekit-wol` | 多设备 WOL；可选 PVE 状态检测与正常关机 | [WOL / PVE](docs/wol.md) | [WOL 部署](deploy/openwrt/wol/README.md) |
+| `homekit-wol` | 多设备 WOL；可选 PVE / Linux Agent 状态检测与正常关机 | [WOL / PVE](docs/wol.md) | [WOL 部署](deploy/openwrt/wol/README.md) |
 | `homekit-temperature` | 读取 Linux thermal 温度传感器 | [温度传感器](docs/temperature.md) | [温度部署](deploy/openwrt/temperature/README.md) |
 | `homekit-chromecast` | Chromecast HomeKit 电视遥控器与 Remote v2 CLI | [Chromecast](docs/chromecast.md) | [Chromecast 部署](deploy/openwrt/chromecast/README.md) |
+| `power-agent` | Linux 正常关机 HTTP 服务 | [Agent 安装与协议](deploy/linux/power-agent/README.md) | 运行于目标主机 |
 
 共享字段与路径规则见 [HomeKit 配置](docs/homekit.md)，安装和维护流程见 [OpenWrt 部署](deploy/openwrt/README.md)。
 

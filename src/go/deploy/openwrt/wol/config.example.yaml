@@ -14,3 +14,9 @@ devices:
     #   type: pve
     #   host: "192.0.2.10"
     #   token: "<用户>@pve!<令牌名>=<密钥>"
+    # Linux 主机也可配置 Agent（与上方 PVE 配置二选一）：
+    # options:
+    #   type: agent
+    #   host: "192.0.2.10"
+    #   token: "<random-token>"
+    #   port: 32045  # 默认值，可省略

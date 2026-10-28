@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/brutella/hap v0.0.35
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/jkiddo/atvremote v0.0.0-20260806215925-ab5a73b3c68d
 	golang.org/x/sys v0.45.0
 	google.golang.org/protobuf v1.36.11

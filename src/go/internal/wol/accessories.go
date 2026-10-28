@@ -51,7 +51,7 @@ func BuildRuntime(cfg Config) ([]*accessory.A, func(context.Context), error) {
 		if device.Options == nil {
 			wakeSwitch = NewWakeSwitch(info, DefaultResetDelay, wake)
 		} else {
-			client := NewPVEClient(*device.Options)
+			client := newPowerBackend(*device.Options)
 			controller := newPowerController(info, client, wake, func(ctx context.Context) (bool, error) { return pingHost(ctx, device.Options.Host) })
 			controllers = append(controllers, controller)
 			wakeSwitch = controller.Accessory

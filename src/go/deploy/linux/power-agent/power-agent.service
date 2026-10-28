@@ -1,0 +1,25 @@
+[Unit]
+Description=Linux power control agent
+After=network.target systemd-logind.service polkit.service
+Requires=systemd-logind.service
+
+[Service]
+User=power-agent
+Group=power-agent
+LoadCredential=config.yaml:/etc/power-agent/config.yaml
+ExecStart=/usr/local/bin/power-agent -config %d/config.yaml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

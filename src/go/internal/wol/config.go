@@ -45,6 +45,7 @@ type DeviceConfig struct {
 }
 
 type PowerOptions struct {
+	Port  int    `yaml:"port,omitempty"`
 	Type  string `yaml:"type"`
 	Host  string `yaml:"host"`
 	Token string `yaml:"token"`
@@ -137,15 +138,23 @@ func (cfg Config) Validate() error {
 	for index, device := range cfg.Devices {
 		path := fmt.Sprintf("devices[%d]", index)
 		if o := device.Options; o != nil {
-			if o.Type != "pve" {
-				problems = append(problems, path+".options.type must be pve")
+			if o.Type != "pve" && o.Type != "agent" {
+				problems = append(problems, path+".options.type must be pve or agent")
 			}
 			if ip := net.ParseIP(o.Host); ip == nil || ip.To4() == nil {
 				problems = append(problems, path+".options.host must be a fixed IPv4 address")
 			}
 			id, secret, ok := strings.Cut(o.Token, "=")
-			if !ok || !strings.Contains(id, "@") || !strings.Contains(id, "!") || secret == "" || strings.ContainsAny(o.Token, "\r\n") {
+			if o.Type == "pve" && (!ok || !strings.Contains(id, "@") || !strings.Contains(id, "!") || secret == "" || strings.ContainsAny(o.Token, "\r\n")) {
 				problems = append(problems, path+".options.token must be user@realm!tokenid=secret")
+			}
+			if o.Type == "agent" {
+				if o.Token == "" || strings.ContainsAny(o.Token, " \t\r\n") {
+					problems = append(problems, path+".options.token must be a nonempty bearer token")
+				}
+				if o.Port != 0 && !isValidPort(o.Port) {
+					problems = append(problems, path+".options.port must be between 1 and 65535")
+				}
 			}
 		}
 

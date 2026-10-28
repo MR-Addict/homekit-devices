@@ -53,3 +53,23 @@ pveum acl modify "/nodes/$pve_node" --tokens 'homekit@pve!power' --roles HomeKit
 首次状态未知时读取不可用，但允许发送开机命令。点击开关仅发起命令，开机后 API 恢复才显示开启，关机后检测离线才显示关闭。关机采用 PVE 正常宿主机关机流程，来宾处理遵循已有配置。
 
 状态转换最多等待 5 分钟，同方向重复请求合并，转换期间拒绝反向请求；超时记录错误并继续检测，不自动重复关机。Apple Home 对通信错误与转换过程的显示取决于客户端。
+
+## 通用 Linux Agent
+
+Linux 目标添加以下配置；桥接运行在路由器等常开设备，Agent 运行在目标主机：
+
+```yaml
+options:
+  type: agent
+  host: "192.0.2.10"
+  token: "<与 Agent 相同的随机 Token>"
+  # port: 32045  # 可省略；自定义端口时覆盖
+```
+
+Agent 安装与 HTTP 协议见 [Linux power-agent](../deploy/linux/power-agent/README.md)。当前支持 systemd Linux，接口及电源实现分离，未来可增加 Windows 后端。Agent 不参与 HomeKit 配对；开机使用已配置 MAC 的 WOL，关机使用 HTTP API，无需在桥接保存 SSH 凭据。
+
+Agent 使用 `/api/status`、`/api/shutdown`，HTTP Bearer Token 认证。HTTP 明文仅用于可信内网；配置保持 0600，不记录或提交 Token。
+
+状态检测、请求超时、连续三轮离线确认与五分钟转换期限沿用上述电源控制规则。`shutting_down` 在离线前仍视为开启；API 认证失败或进程故障但 ICMP 可达时报告通信故障。断网无法与关机完全区分。
+
+可显式选择实机验收（会真实操作目标，普通 `go test` 不连接设备）：先用 `GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go test -c -o bin/wol-live-linux-arm64 ./internal/wol` 构建，在路由器设置 `HOMEKIT_POWER_CONFIG=/etc/homekit-wol/config.yaml`，执行测试二进制 `-test.run '^TestLivePower$' -test.v` 只读检查；增加 `HOMEKIT_POWER_ACTION=off` 或 `on` 分别验证正常关机、WOL 开机及 HAP 状态转换。当前验收配置须只有一个电源目标。

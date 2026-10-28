@@ -19,3 +19,5 @@
 - 重启服务后确认 Apple Home 配对保留，并由客户端验证控制与通知。
 
 PVE 关机验收使用不依赖宿主机内虚拟路由器的管理与唤醒路径，预先确保可现场恢复。部署和命令发送成功不等于唤醒或客户端验收通过。
+
+Linux Agent 目标使用 `options.type: agent`、固定 IPv4 `host` 和共享随机 `token`，端口默认为 32045，可省略 `options.port`。先按 [Agent 安装说明](../../linux/power-agent/README.md) 部署目标主机，再部署桥接。验证 API 关机 → 离线 → WOL → Agent 恢复，以及家庭 App 状态同步。保留已有目标与配对数据库。
